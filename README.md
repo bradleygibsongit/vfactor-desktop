@@ -1,11 +1,10 @@
 # Nucleus Desktop
 
-Desktop AI agent powered by Claude Agent SDK.
+Desktop AI agent app with Tauri + React.
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.0+
-- [Claude Code](https://claude.ai/code) installed and authenticated, OR an Anthropic API key
 
 ## Setup
 
@@ -14,33 +13,30 @@ Desktop AI agent powered by Claude Agent SDK.
    bun install
    ```
 
-2. Configure authentication (choose one):
-
-   **Option A: Use existing Claude Code credentials (recommended)**
-
-   If you have Claude Code installed and authenticated, the SDK will automatically use those credentials. No additional setup needed.
-
-   **Option B: Use API key**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your ANTHROPIC_API_KEY
-   ```
 
 ## Usage
 
-**Interactive mode** - chat with the agent:
-```bash
-bun run start
-```
-
-**Single prompt mode** - run one query:
-```bash
-bun run start "What files are in this directory?"
-```
-
-**Watch mode** - auto-restart on code changes:
+**Web UI (Vite)**:
 ```bash
 bun run dev
+```
+
+**Desktop app (Tauri)**:
+```bash
+bun run tauri:dev
+```
+
+**CLI (OpenCode SDK, streaming by default)**:
+```bash
+bun run cli "What files are in this repo?"
+# Stream tool calls
+bun run cli "What files are in this repo?" --stream-tools
+# Disable streaming
+bun run cli "What files are in this repo?" --no-stream
+# Only show raw response
+bun run cli "What files are in this repo?" --raw-only
+# Only show raw JSON
+bun run cli "What files are in this repo?" --json-only
 ```
 
 **Type checking**:
@@ -52,31 +48,30 @@ bun run typecheck
 
 ```
 nucleus-desktop/
-├── index.ts           # CLI entry point with Agent SDK
+├── src/               # React UI
+├── src-tauri/         # Tauri backend
 ├── package.json       # Dependencies and scripts
 ├── tsconfig.json      # TypeScript configuration
-├── CLAUDE.md          # Project instructions for Claude
-├── MIGRATION.md       # Detailed migration plan from claude-interface
-└── .env.example       # Environment template
+├── vite.config.ts     # Vite config
+└── MIGRATION.md       # Migration plan from claude-interface
 ```
 
 ## Features
 
-- Full autonomy with all Claude Code tools (Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch, Task, AskUserQuestion, TodoWrite)
-- Graceful cancellation with Ctrl+C
-- Streaming message output
-- Session management
-- Project settings integration (CLAUDE.md)
+- Desktop UI shell with React + Tauri
+- Shared layout system (sidebars, title bar, main content)
+- Theming based on system preference
 
 ## Development Phases
 
 See [MIGRATION.md](./MIGRATION.md) for the full plan.
 
-1. **Phase 1 (Current)**: CLI foundation with Claude Agent SDK
-2. **Phase 2**: Add Tauri + React for desktop UI
+1. **Phase 1 (Current)**: UI shell with Tauri + React
+2. **Phase 2**: Agent runtime integration
 3. **Phase 3**: Migrate UI components from claude-interface project
 
 ## Resources
 
-- [Claude Agent SDK Documentation](https://platform.claude.com/docs/en/api/agent-sdk/overview)
-- [TypeScript SDK Reference](https://platform.claude.com/docs/en/api/agent-sdk/typescript)
+- [Tauri Documentation](https://tauri.app/)
+- [React Documentation](https://react.dev/)
+- [Vite Documentation](https://vitejs.dev/)

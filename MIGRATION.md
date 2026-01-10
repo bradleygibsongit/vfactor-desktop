@@ -1,6 +1,6 @@
 # Nucleus Desktop - Migration Plan
 
-This document details the migration from `claude-interface` (custom ACP implementation) to `nucleus-desktop` (Claude Agent SDK).
+This document details the migration from `claude-interface` (custom ACP implementation) to `nucleus-desktop`.
 
 ## Background
 
@@ -8,7 +8,7 @@ The `claude-interface` project had a custom ACP (Agent Client Protocol) implemen
 - **Rust backend** (~6,500 lines): Managed stdio JSON-RPC communication with OpenCode agent
 - **TypeScript frontend** (~7,500 lines): React hooks, Zustand store, permission handling
 
-This was overly complex. The Claude Agent SDK provides all this functionality out of the box.
+This was overly complex. We are moving to a simpler agent runtime integration (TBD).
 
 ## What We're Keeping
 
@@ -39,125 +39,37 @@ This was overly complex. The Claude Agent SDK provides all this functionality ou
 
 ## Migration Phases
 
-### Phase 1: CLI Foundation (Current)
+### Phase 1: UI Shell (Current)
 **Status: In Progress**
 
 - [x] Initialize project with bun
-- [x] Install Claude Agent SDK
-- [x] Create basic CLI with `query()` function
-- [x] Handle all SDK message types
-- [x] Full autonomy tools configured
-- [ ] Test with real prompts
-- [ ] Verify session management works
+- [x] Set up React + Tauri scaffolding
+- [x] Build core app layout (title bar, sidebars, main content)
+- [x] Add system theme handling
+- [ ] Wire up initial chat UI components
 
-**Goal**: Prove the Agent SDK works correctly before adding UI complexity.
+**Goal**: Establish the desktop UI shell before agent runtime integration.
 
-### Phase 2: Add Tauri + React
+### Phase 2: Agent Runtime Integration
 **Status: Not Started**
 
-1. Initialize Tauri in the project
-   ```bash
-   bun add -d @tauri-apps/cli
-   bunx tauri init
-   ```
-
-2. Set up React with Bun's bundler (no Vite)
-   ```bash
-   bun add react react-dom
-   bun add -d @types/react @types/react-dom
-   ```
-
-3. Create basic app structure:
-   ```
-   src/
-   ├── main.tsx           # React entry point
-   ├── App.tsx            # Root component
-   └── agent/
-       └── client.ts      # Agent SDK wrapper
-   ```
-
-4. Configure Tauri for overlay titlebar (like claude-interface)
-
-### Phase 3: Agent SDK Integration Layer
-**Status: Not Started**
-
-Create React-friendly wrappers around the Agent SDK:
-
-```typescript
-// src/agent/client.ts
-import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-
-export async function* runAgent(prompt: string) {
-  for await (const message of query({
-    prompt,
-    options: {
-      allowedTools: ALL_TOOLS,
-      permissionMode: "default",
-    },
-  })) {
-    yield message;
-  }
-}
-```
-
-```typescript
-// src/agent/hooks/useAgent.ts
-export function useAgent() {
-  const [messages, setMessages] = useState<SDKMessage[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
-
-  const sendPrompt = useCallback(async (prompt: string) => {
-    setIsRunning(true);
-    for await (const msg of runAgent(prompt)) {
-      setMessages(prev => [...prev, msg]);
-    }
-    setIsRunning(false);
-  }, []);
-
-  return { messages, isRunning, sendPrompt };
-}
-```
+1. Choose or implement the agent runtime (OpenCode server or custom)
+2. Define a runtime adapter API (`sendPrompt`, `streamEvents`, `permissions`)
+3. Wire the adapter into React state and chat components
+4. Implement persistence for sessions and messages
 
 ### Phase 4: Migrate UI Components
 **Status: Not Started**
 
 1. Copy shared UI components from claude-interface
 2. Copy chat components
-3. Adapt types to match SDK message format
-4. Wire up to Agent SDK hooks
-
-**Type Mapping** (claude-interface → Agent SDK):
-| Old Type | SDK Type |
-|----------|----------|
-| `Message` | `SDKAssistantMessage \| SDKUserMessage` |
-| `ToolCallState` | Extract from `SDKAssistantMessage.message.content` |
-| `PendingPermission` | Use `canUseTool` callback |
-| `ResolvedPermission` | Track in local state |
+3. Adapt types to match the chosen agent runtime format
+4. Wire up to agent runtime hooks/adapters
 
 ### Phase 5: Permission UI
 **Status: Not Started**
 
-The Agent SDK's `canUseTool` callback enables custom permission UI:
-
-```typescript
-const result = query({
-  prompt,
-  options: {
-    canUseTool: async (toolName, input, { signal, suggestions }) => {
-      // Show UI, wait for user decision
-      const decision = await showPermissionDialog(toolName, input);
-
-      if (decision.approved) {
-        return { behavior: "allow", updatedInput: input };
-      } else {
-        return { behavior: "deny", message: decision.reason };
-      }
-    },
-  },
-});
-```
-
-Migrate the existing `PermissionCard` component to work with this callback.
+Define a permission request flow in the UI that the agent runtime adapter can invoke (approval/deny + optional edit). Migrate the existing `PermissionCard` component to match the new adapter API.
 
 ### Phase 6: Polish & Cleanup
 **Status: Not Started**
@@ -166,17 +78,6 @@ Migrate the existing `PermissionCard` component to work with this callback.
 - Final testing of all features
 - Performance optimization
 - Error handling improvements
-
-## Key Differences: ACP vs Agent SDK
-
-| Feature | Old ACP | Agent SDK |
-|---------|---------|-----------|
-| Communication | Rust → stdio → OpenCode | Direct SDK call |
-| Tool Execution | Manual via Rust | Handled by SDK |
-| Permissions | Custom Tauri events | `canUseTool` callback |
-| Sessions | Manual state management | Built-in session support |
-| Streaming | Manual message parsing | `for await` on generator |
-| Subagents | Not supported | Built-in `Task` tool |
 
 ## Files to Delete from claude-interface
 
@@ -201,6 +102,5 @@ Before considering migration complete:
 
 ## Resources
 
-- [Claude Agent SDK Docs](https://platform.claude.com/docs/en/api/agent-sdk/overview)
-- [TypeScript SDK Reference](https://platform.claude.com/docs/en/api/agent-sdk/typescript)
-- [SDK GitHub](https://github.com/anthropics/claude-agent-sdk-typescript)
+- [Tauri Documentation](https://tauri.app/)
+- [React Documentation](https://react.dev/)

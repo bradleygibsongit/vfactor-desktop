@@ -1,214 +1,266 @@
 /**
- * Nucleus Desktop - CLI Entry Point
- *
- * A desktop AI agent powered by Claude Agent SDK.
- * This CLI validates the SDK integration before adding UI.
+ * Nucleus Desktop - OpenCode CLI
  *
  * Usage:
- *   bun run start                    # Interactive mode
- *   bun run start "your prompt"      # Single prompt mode
+ *   bun run cli "your prompt"
  */
 
-import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import {
+  createOpencode,
+  type EventMessagePartUpdated,
+  type EventMessageUpdated,
+  type GlobalEvent,
+  type TextPart,
+  type ToolPart,
+  type ToolState,
+} from "@opencode-ai/sdk"
 
-// All available tools for full autonomy
-const ALL_TOOLS = [
-  // File operations
-  "Read",
-  "Write",
-  "Edit",
-  "Glob",
-  "Grep",
-  // Shell execution
-  "Bash",
-  // Web capabilities
-  "WebSearch",
-  "WebFetch",
-  // Agent features
-  "Task", // Subagents
-  "AskUserQuestion",
-  "TodoWrite",
-];
+const HELP_FLAGS = new Set(["--help", "-h"])
+const NO_STREAM_FLAG = "--no-stream"
+const RAW_ONLY_FLAG = "--raw-only"
+const JSON_ONLY_FLAG = "--json-only"
+const STREAM_TOOLS_FLAG = "--stream-tools"
+const KNOWN_FLAGS = new Set([
+  ...HELP_FLAGS,
+  NO_STREAM_FLAG,
+  RAW_ONLY_FLAG,
+  JSON_ONLY_FLAG,
+  STREAM_TOOLS_FLAG,
+])
 
-// Global abort controller for graceful shutdown
-let abortController = new AbortController();
-
-// Handle Ctrl+C gracefully
-process.on("SIGINT", () => {
-  console.log("\nInterrupting...");
-  abortController.abort();
-  // Reset for next query
-  abortController = new AbortController();
-});
-
-/**
- * Process and display SDK messages.
- * This function demonstrates handling all message types.
- */
-function handleMessage(message: SDKMessage): void {
-  switch (message.type) {
-    case "system":
-      if (message.subtype === "init") {
-        console.log("\n--- Session Initialized ---");
-        console.log(`Session ID: ${message.session_id}`);
-        console.log(`Model: ${message.model}`);
-        console.log(`Tools: ${message.tools.join(", ")}`);
-        console.log(`Permission Mode: ${message.permissionMode}`);
-        console.log("----------------------------\n");
-      }
-      break;
-
-    case "assistant":
-      // Process assistant message content
-      for (const block of message.message.content) {
-        if (block.type === "text") {
-          console.log(block.text);
-        } else if (block.type === "tool_use") {
-          console.log(`\n[Tool: ${block.name}]`);
-        }
-      }
-      break;
-
-    case "user":
-      // User messages (including tool results) - usually not displayed
-      break;
-
-    case "result":
-      console.log("\n--- Query Complete ---");
-      if (message.subtype === "success") {
-        console.log(`Result: ${message.result}`);
-        console.log(`Turns: ${message.num_turns}`);
-        console.log(`Cost: $${message.total_cost_usd.toFixed(4)}`);
-        console.log(`Duration: ${message.duration_ms}ms`);
-      } else {
-        console.error(`Error: ${message.subtype}`);
-        if ("errors" in message) {
-          console.error(message.errors.join("\n"));
-        }
-      }
-      console.log("----------------------\n");
-      break;
-
-    case "stream_event":
-      // Partial messages (only with includePartialMessages: true)
-      break;
-  }
+function printUsage(): void {
+  console.log(
+    "Usage: bun run cli \"your prompt\" [--no-stream] [--raw-only] [--json-only] [--stream-tools]"
+  )
 }
 
-/**
- * Run a single query with the agent.
- */
-async function runQuery(prompt: string): Promise<void> {
-  console.log(`\nPrompt: ${prompt}\n`);
+function extractTextFromParts(parts: unknown): string | null {
+  if (!Array.isArray(parts)) {
+    return null
+  }
 
-  // Reset abort controller for this query
-  abortController = new AbortController();
+  const textParts = parts
+    .filter((part): part is { type: string; text?: string } =>
+      Boolean(part && typeof part === "object" && "type" in part)
+    )
+    .map((part) => (part.type === "text" ? part.text : null))
+    .filter((text): text is string => typeof text === "string")
+
+  return textParts.length ? textParts.join("\n") : null
+}
+
+function extractTextFromResponse(response: unknown): string | null {
+  if (!response || typeof response !== "object") {
+    return null
+  }
+
+  if ("parts" in response) {
+    const text = extractTextFromParts((response as { parts?: unknown }).parts)
+    if (text) {
+      return text
+    }
+  }
+
+  if ("message" in response) {
+    const message = (response as { message?: unknown }).message
+    if (message && typeof message === "object" && "content" in message) {
+      const text = extractTextFromParts((message as { content?: unknown }).content)
+      if (text) {
+        return text
+      }
+    }
+  }
+
+  if ("content" in response) {
+    const text = extractTextFromParts((response as { content?: unknown }).content)
+    if (text) {
+      return text
+    }
+  }
+
+  return null
+}
+
+function formatToolState(state: ToolState, toolName: string): string {
+  if (state.status === "pending") {
+    return `[Tool ${toolName}] pending`
+  }
+
+  if (state.status === "running") {
+    return `[Tool ${toolName}] running${state.title ? `: ${state.title}` : ""}`
+  }
+
+  if (state.status === "error") {
+    return `[Tool ${toolName}] error: ${state.error}`
+  }
+
+  return `[Tool ${toolName}] completed${state.title ? `: ${state.title}` : ""}`
+}
+
+type StreamResult = {
+  streamedText: boolean
+  streamedTools: boolean
+}
+
+async function streamAssistantParts(
+  stream: AsyncIterable<GlobalEvent>,
+  sessionID: string,
+  streamTools: boolean
+): Promise<StreamResult> {
+  const seenParts = new Set<string>()
+  const toolStates = new Map<string, string>()
+  let streamedText = false
+  let streamedTools = false
+  let assistantMessageID: string | null = null
+
+  for await (const event of stream) {
+    if (!event || typeof event !== "object" || !("payload" in event)) {
+      continue
+    }
+
+    const payload = (event as GlobalEvent).payload
+
+    if (!payload || typeof payload !== "object") {
+      continue
+    }
+
+    if (payload.type === "message.updated") {
+      const { info } = (payload as EventMessageUpdated).properties
+
+      if (info.sessionID === sessionID && info.role === "assistant") {
+        assistantMessageID = info.id
+      }
+
+      continue
+    }
+
+    if (payload.type !== "message.part.updated" || !assistantMessageID) {
+      continue
+    }
+
+    const { part, delta } = (payload as EventMessagePartUpdated).properties
+
+    if (part.sessionID !== sessionID || part.messageID !== assistantMessageID) {
+      continue
+    }
+
+    if (part.type === "text") {
+      const textPart = part as TextPart
+
+      if (!streamedText) {
+        console.log("\nAssistant Response (streaming):\n")
+        streamedText = true
+      }
+
+      if (typeof delta === "string") {
+        process.stdout.write(delta)
+      } else if (!seenParts.has(textPart.id)) {
+        process.stdout.write(textPart.text)
+      }
+
+      seenParts.add(textPart.id)
+      continue
+    }
+
+    if (part.type === "tool" && streamTools) {
+      const toolPart = part as ToolPart
+      const toolState = toolPart.state
+      const lastState = toolStates.get(toolPart.callID)
+
+      if (!lastState || lastState !== toolState.status) {
+        if (!streamedTools) {
+          console.log("\n\nTool Activity:\n")
+          streamedTools = true
+        }
+
+        console.log(formatToolState(toolState, toolPart.tool))
+
+        if (toolState.status === "completed" && toolState.output) {
+          console.log(toolState.output)
+        }
+
+        toolStates.set(toolPart.callID, toolState.status)
+      }
+    }
+  }
+
+  return { streamedText, streamedTools }
+}
+
+async function run(): Promise<void> {
+  const args = process.argv.slice(2)
+  const helpRequested = args.some((arg) => HELP_FLAGS.has(arg))
+  const jsonOnly = args.includes(JSON_ONLY_FLAG)
+  const rawOnly = jsonOnly || args.includes(RAW_ONLY_FLAG)
+  const streamEnabled = !rawOnly && !args.includes(NO_STREAM_FLAG)
+  const streamTools = streamEnabled && args.includes(STREAM_TOOLS_FLAG)
+  const promptArgs = args.filter((arg) => !KNOWN_FLAGS.has(arg))
+
+  if (!promptArgs.length || helpRequested) {
+    printUsage()
+    process.exit(promptArgs.length ? 0 : 1)
+  }
+
+  const prompt = promptArgs.join(" ")
+  const opencode = await createOpencode()
 
   try {
-    for await (const message of query({
-      prompt,
-      options: {
-        // Use Claude Code's optimized system prompt
-        systemPrompt: {
-          type: "preset",
-          preset: "claude_code",
-        },
-        // Load project settings (CLAUDE.md, .claude/settings.json)
-        settingSources: ["project"],
-        // All tools for full autonomy
-        allowedTools: ALL_TOOLS,
-        // Require approval for sensitive operations
-        permissionMode: "default",
-        // Enable graceful cancellation
-        abortController,
-        // For development, you can use "acceptEdits" or "bypassPermissions"
-        // permissionMode: "bypassPermissions",
-        // allowDangerouslySkipPermissions: true,
-      },
-    })) {
-      handleMessage(message);
+    const sessionResponse = await opencode.client.session.create({
+      body: { title: prompt.slice(0, 60) },
+    })
+
+    const session = sessionResponse.data
+
+    if (!session?.id) {
+      throw new Error("Failed to create session")
     }
-  } catch (error) {
-    // Handle different error types
-    if (error instanceof Error) {
-      if (error.name === "AbortError") {
-        console.log("Query cancelled.");
-        return;
-      }
-      console.error(`Query failed: ${error.message}`);
-      if (process.env.DEBUG) {
-        console.error(error.stack);
-      }
-    } else {
-      console.error("Query failed:", error);
+
+    const streamController = new AbortController()
+    const streamTask = streamEnabled
+      ? opencode.client.global
+          .event({ signal: streamController.signal })
+          .then((result) => streamAssistantParts(result.stream, session.id, streamTools))
+      : Promise.resolve({ streamedText: false, streamedTools: false })
+
+    const result = await opencode.client.session.prompt({
+      path: { id: session.id },
+      body: { parts: [{ type: "text", text: prompt }] },
+    })
+
+    streamController.abort()
+    const { streamedText } = await streamTask.catch(() => ({
+      streamedText: false,
+      streamedTools: false,
+    }))
+
+    if (jsonOnly) {
+      console.log(JSON.stringify(result.data, null, 2))
+      return
     }
-    process.exit(1);
+
+    if (streamEnabled && streamedText) {
+      console.log("\n")
+    }
+
+    console.log(`Session ID: ${session.id}`)
+
+    if (!rawOnly && (!streamEnabled || !streamedText)) {
+      const text = extractTextFromResponse(result.data)
+
+      if (text) {
+        console.log("\nAssistant Response:\n")
+        console.log(text)
+      }
+    }
+
+    console.log("\nRaw Response:\n")
+    console.log(JSON.stringify(result.data, null, 2))
+  } finally {
+    opencode.server.close()
   }
 }
 
-/**
- * Interactive CLI mode - read prompts from stdin.
- */
-async function interactiveMode(): Promise<void> {
-  console.log("Nucleus Desktop - Interactive Mode");
-  console.log("Type your prompts, press Enter to submit.");
-  console.log('Type "exit" or Ctrl+C to quit.\n');
-
-  const reader = Bun.stdin.stream().getReader();
-  const decoder = new TextDecoder();
-
-  process.stdout.write("> ");
-
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-
-    // Process complete lines
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-    for (const line of lines) {
-      const prompt = line.trim();
-
-      if (!prompt) {
-        process.stdout.write("> ");
-        continue;
-      }
-
-      if (prompt.toLowerCase() === "exit") {
-        console.log("Goodbye!");
-        process.exit(0);
-      }
-
-      await runQuery(prompt);
-      process.stdout.write("> ");
-    }
-  }
-}
-
-// Validate environment
-function checkEnvironment(): void {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn(
-      "Warning: ANTHROPIC_API_KEY not set. The SDK will attempt to use Claude Code credentials.\n"
-    );
-  }
-}
-
-// Main entry point
-checkEnvironment();
-
-const args = process.argv.slice(2);
-
-if (args.length > 0) {
-  // Single prompt mode
-  const prompt = args.join(" ");
-  await runQuery(prompt);
-} else {
-  // Interactive mode
-  await interactiveMode();
-}
+run().catch((error) => {
+  console.error(error instanceof Error ? error.message : error)
+  process.exit(1)
+})

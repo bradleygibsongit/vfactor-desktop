@@ -38,6 +38,7 @@ export type ToolKind =
   | "execute"
   | "think"
   | "fetch"
+  | "diff"
   | "unknown";
 
 /** Tool call content items */

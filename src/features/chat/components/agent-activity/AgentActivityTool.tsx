@@ -1,62 +1,62 @@
 /**
- * AgentActivityTool - Expandable card for a tool call.
+ * AgentActivityTool - Compact inline tool row (non-SDK version).
  *
  * Shows:
  * - Icon based on tool kind
- * - Tool name and title
- * - Status indicator
- * - Expandable content (output, diff, etc.)
+ * - Tool title + optional chip
+ * - Status indicator (spinner for active)
+ * - Expandable section with content (text, diff, terminal)
  */
 
 import { useState } from "react";
 import {
   FileText,
-  Pencil,
-  Trash2,
-  FolderInput,
-  Search,
+  PencilSimple,
+  Trash,
+  FolderOpen,
+  MagnifyingGlass,
   Terminal,
   Brain,
   Globe,
-  CircleDot,
-  CheckCircle2,
-  XCircle,
-  ChevronUpIcon,
-  ChevronDownIcon,
-  Loader2,
-} from "lucide-react";
+  CircleDashed,
+  CircleNotch,
+  GitDiff,
+} from "@phosphor-icons/react";
 import type { ToolCallState, ToolKind, ToolCallContent } from "../../types";
 import { cn } from "@/lib/utils";
 
 interface AgentActivityToolProps {
   toolCall: ToolCallState;
   className?: string;
-  children?: React.ReactNode;
 }
 
 /**
- * Get human-readable tool type name.
+ * Render the tool kind icon.
  */
-function getToolTypeName(kind?: ToolKind): string {
+function ToolKindIcon({ kind, className }: { kind?: ToolKind; className?: string }) {
+  const iconClass = cn("size-4 shrink-0", className);
+
   switch (kind) {
     case "read":
-      return "Read";
+      return <FileText className={iconClass} />;
     case "edit":
-      return "Edit";
+      return <PencilSimple className={iconClass} />;
     case "delete":
-      return "Delete";
+      return <Trash className={iconClass} />;
     case "move":
-      return "Move";
+      return <FolderOpen className={iconClass} />;
     case "search":
-      return "Search";
+      return <MagnifyingGlass className={iconClass} />;
     case "execute":
-      return "Shell";
+      return <Terminal className={iconClass} />;
     case "think":
-      return "Think";
+      return <Brain className={iconClass} />;
     case "fetch":
-      return "Fetch";
+      return <Globe className={iconClass} />;
+    case "diff":
+      return <GitDiff className={iconClass} />;
     default:
-      return "Tool";
+      return <CircleDashed className={iconClass} />;
   }
 }
 
@@ -67,18 +67,18 @@ function ToolContent({ content }: { content: ToolCallContent[] }) {
   if (content.length === 0) return null;
 
   return (
-    <div className="mt-2 space-y-2 text-xs">
+    <div className="space-y-3 text-xs">
       {content.map((item, index) => {
         if (item.type === "content") {
           const block = item.content;
           if (block.type === "text") {
             return (
-              <pre
-                key={index}
-                className="bg-muted/50 rounded p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-words"
-              >
-                {block.text}
-              </pre>
+              <div key={index}>
+                <div className="text-muted-foreground mb-1 font-medium">Output</div>
+                <pre className="bg-muted/50 rounded p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-words font-mono">
+                  {block.text}
+                </pre>
+              </div>
             );
           }
           return null;
@@ -86,10 +86,12 @@ function ToolContent({ content }: { content: ToolCallContent[] }) {
 
         if (item.type === "diff") {
           return (
-            <div key={index} className="bg-muted/50 rounded p-2 overflow-x-auto">
-              <div className="text-muted-foreground mb-1">{item.path}</div>
-              <pre className="text-red-400 line-through">{item.oldText || "(empty)"}</pre>
-              <pre className="text-green-400">{item.newText || "(empty)"}</pre>
+            <div key={index}>
+              <div className="text-muted-foreground mb-1 font-medium">Diff: {item.path}</div>
+              <div className="bg-muted/50 rounded p-2 overflow-x-auto font-mono">
+                <pre className="text-red-400 line-through">{item.oldText || "(empty)"}</pre>
+                <pre className="text-green-400">{item.newText || "(empty)"}</pre>
+              </div>
             </div>
           );
         }
@@ -108,102 +110,49 @@ function ToolContent({ content }: { content: ToolCallContent[] }) {
   );
 }
 
-/**
- * Render the tool kind icon based on kind.
- */
-function ToolKindIcon({ kind }: { kind?: ToolKind }) {
-  const iconClass = "size-4 text-muted-foreground shrink-0";
-
-  switch (kind) {
-    case "read":
-      return <FileText className={iconClass} />;
-    case "edit":
-      return <Pencil className={iconClass} />;
-    case "delete":
-      return <Trash2 className={iconClass} />;
-    case "move":
-      return <FolderInput className={iconClass} />;
-    case "search":
-      return <Search className={iconClass} />;
-    case "execute":
-      return <Terminal className={iconClass} />;
-    case "think":
-      return <Brain className={iconClass} />;
-    case "fetch":
-      return <Globe className={iconClass} />;
-    default:
-      return <CircleDot className={iconClass} />;
-  }
-}
-
-/**
- * Render the status icon based on tool call status.
- */
-function ToolStatusIcon({ status }: { status: ToolCallState["status"] }) {
-  const isActive = status === "pending" || status === "in_progress";
-  const isFailed = status === "failed";
-  const isCompleted = status === "completed";
-
-  if (isActive) {
-    return <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />;
-  }
-  if (isFailed) {
-    return <XCircle className="size-4 shrink-0 text-destructive" />;
-  }
-  if (isCompleted) {
-    return <CheckCircle2 className="size-4 shrink-0 text-green-500" />;
-  }
-  return <CircleDot className="size-4 shrink-0" />;
-}
-
 export function AgentActivityTool({
   toolCall,
   className,
-  children,
 }: AgentActivityToolProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const typeName = getToolTypeName(toolCall.kind);
+  const isActive = toolCall.status === "pending" || toolCall.status === "in_progress";
   const isFailed = toolCall.status === "failed";
+  const isCompleted = toolCall.status === "completed";
   const hasContent = toolCall.content.length > 0;
+  const canExpand = (isCompleted || isFailed) && hasContent;
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border bg-card",
-        isFailed && "border-destructive/50",
-        className
-      )}
-    >
+    <div className={cn("text-sm", className)}>
+      {/* Compact row */}
       <button
         type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex w-full items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors rounded-lg"
+        onClick={() => canExpand && setIsExpanded(!isExpanded)}
+        disabled={!canExpand}
+        className={cn(
+          "flex items-center gap-2 text-left w-full",
+          canExpand && "cursor-pointer hover:opacity-80",
+          !canExpand && "cursor-default"
+        )}
       >
-        <ToolKindIcon kind={toolCall.kind} />
-        <span className="font-medium text-sm shrink-0">{typeName}</span>
-        <span className="text-sm text-muted-foreground truncate flex-1">
+        {/* Icon */}
+        <ToolKindIcon kind={toolCall.kind} className="text-muted-foreground" />
+
+        {/* Title */}
+        <span className={cn("font-medium", isFailed && "text-destructive")}>
           {toolCall.title}
         </span>
-        <ToolStatusIcon status={toolCall.status} />
-        {hasContent && (
-          isExpanded ? (
-            <ChevronUpIcon className="size-4 text-muted-foreground shrink-0" />
-          ) : (
-            <ChevronDownIcon className="size-4 text-muted-foreground shrink-0" />
-          )
+
+        {/* Spinner for active */}
+        {isActive && (
+          <CircleNotch className="size-3.5 shrink-0 animate-spin text-muted-foreground ml-auto" />
         )}
       </button>
 
-      {isExpanded && hasContent && (
-        <div className="px-3 pb-3 border-t border-border/50">
+      {/* Expanded section */}
+      {isExpanded && canExpand && (
+        <div className="mt-2 ml-6">
           <ToolContent content={toolCall.content} />
-        </div>
-      )}
-
-      {children && (
-        <div className="px-3 pb-3">
-          {children}
         </div>
       )}
     </div>

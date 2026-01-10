@@ -1,4 +1,4 @@
-import { ChevronUp } from "lucide-react"
+import { CaretUp } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import { Terminal } from "./Terminal"
 
@@ -19,7 +19,7 @@ export function TerminalPanel({ isOpen, onToggle, className }: TerminalPanelProp
           isOpen && "border-b border-border"
         )}
       >
-        <ChevronUp
+        <CaretUp
           className={cn(
             "size-4 text-muted-foreground transition-transform",
             isOpen && "rotate-180"

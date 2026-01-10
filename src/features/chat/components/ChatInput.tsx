@@ -24,9 +24,7 @@ export function ChatInput({
   return (
     <div className="bg-main-content px-8 pb-4">
       <PromptInput
-        onSubmit={({ text }) => {
-          onSubmit(text);
-        }}
+        onSubmit={({ text }) => onSubmit(text)}
       >
         <PromptInputTextarea
           value={input}

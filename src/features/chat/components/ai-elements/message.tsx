@@ -14,11 +14,11 @@ import {
 import { cn } from "@/lib/utils";
 import type { FileUIPart, UIMessage } from "ai";
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  PaperclipIcon,
-  XIcon,
-} from "lucide-react";
+  CaretLeft,
+  CaretRight,
+  Paperclip,
+  X,
+} from "@phosphor-icons/react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import {
   createContext,
@@ -37,8 +37,8 @@ export type MessageProps = HTMLAttributes<HTMLDivElement> & {
 export const Message = ({ className, from, ...props }: MessageProps) => (
   <div
     className={cn(
-      "group flex w-full max-w-[95%] flex-col gap-2",
-      from === "user" ? "is-user ml-auto justify-end" : "is-assistant",
+      "group flex w-full flex-col gap-2",
+      from === "user" ? "is-user" : "is-assistant",
       className
     )}
     {...props}
@@ -54,9 +54,8 @@ export const MessageContent = ({
 }: MessageContentProps) => (
   <div
     className={cn(
-      "is-user:dark flex w-fit max-w-full min-w-0 flex-col gap-2 overflow-hidden text-sm",
-      "group-[.is-user]:ml-auto group-[.is-user]:rounded-lg group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
-      "group-[.is-assistant]:text-foreground",
+      "flex w-full min-w-0 flex-col gap-2 overflow-hidden text-sm text-foreground",
+      "group-[.is-user]:bg-secondary group-[.is-user]:border-l-4 group-[.is-user]:border-l-primary group-[.is-user]:px-4 group-[.is-user]:py-3",
       className
     )}
     {...props}
@@ -267,7 +266,7 @@ export const MessageBranchPrevious = ({
       variant="ghost"
       {...props}
     >
-      {children ?? <ChevronLeftIcon size={14} />}
+      {children ?? <CaretLeft size={14} />}
     </Button>
   );
 };
@@ -289,7 +288,7 @@ export const MessageBranchNext = ({
       variant="ghost"
       {...props}
     >
-      {children ?? <ChevronRightIcon size={14} />}
+      {children ?? <CaretRight size={14} />}
     </Button>
   );
 };
@@ -377,7 +376,7 @@ export function MessageAttachment({
               }}
               variant="ghost"
             >
-              <XIcon />
+              <X />
               <span className="sr-only">Remove</span>
             </Button>
           )}
@@ -385,7 +384,7 @@ export function MessageAttachment({
       ) : (
         <>
           <Tooltip>
-            <TooltipTrigger render={<div className="flex size-full shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground" />}><PaperclipIcon className="size-4" /></TooltipTrigger>
+            <TooltipTrigger render={<div className="flex size-full shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground" />}><Paperclip className="size-4" /></TooltipTrigger>
             <TooltipContent>
               <p>{attachmentLabel}</p>
             </TooltipContent>
@@ -400,7 +399,7 @@ export function MessageAttachment({
               }}
               variant="ghost"
             >
-              <XIcon />
+              <X />
               <span className="sr-only">Remove</span>
             </Button>
           )}

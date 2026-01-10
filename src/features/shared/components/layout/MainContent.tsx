@@ -1,8 +1,7 @@
-import { useState } from "react"
 import { ChatContainer, TabBar } from "@/features/chat/components"
 import { FileViewer, DiffViewer } from "@/features/editor/components"
 import { getDiffData } from "@/features/editor/mocks/mock-diffs"
-import { initialTabs } from "@/features/editor/mocks/mock-tabs"
+import { useTabStore } from "@/features/editor/store"
 import type { Tab } from "@/features/chat/types"
 
 interface DiffTabContentProps {
@@ -35,21 +34,28 @@ function TabContent({ tab }: TabContentProps) {
   }
 
   if (tab.type === "file") {
-    return <FileViewer filename={tab.title} />
+    return <FileViewer filename={tab.title} filePath={tab.filePath} />
   }
 
   return <DiffTabContent tab={tab} />
 }
 
-export function MainContent() {
-  const [tabs] = useState<Tab[]>(initialTabs)
-  const [activeTabId, setActiveTabId] = useState("1")
+const CHAT_TAB: Tab = { id: "chat", type: "chat", title: "Chat" }
 
-  const activeTab = tabs.find((tab) => tab.id === activeTabId)
+export function MainContent() {
+  const { tabs, activeTabId, setActiveTab, closeTab } = useTabStore()
+
+  const tabsWithChat = [CHAT_TAB, ...tabs.filter((tab) => tab.type !== "chat")]
+  const activeTab = tabsWithChat.find((tab) => tab.id === activeTabId) ?? CHAT_TAB
 
   return (
     <main className="flex-1 min-w-80 bg-main-content text-main-content-foreground overflow-hidden flex flex-col">
-      <TabBar tabs={tabs} activeTabId={activeTabId} onTabChange={setActiveTabId} />
+      <TabBar
+        tabs={tabsWithChat}
+        activeTabId={activeTabId ?? CHAT_TAB.id}
+        onTabChange={setActiveTab}
+        onTabClose={closeTab}
+      />
       <div className="flex-1 overflow-hidden">
         <TabContent tab={activeTab} />
       </div>

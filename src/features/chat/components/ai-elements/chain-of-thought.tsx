@@ -10,12 +10,12 @@ import {
 import { LoadingDots } from "@/features/shared/components/ui/loading-dots";
 import { cn } from "@/lib/utils";
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  DotIcon,
-  type LucideIcon,
-  LoaderIcon,
-} from "lucide-react";
+  CaretDown,
+  CaretUp,
+  Circle,
+  CircleNotch,
+  type Icon,
+} from "@phosphor-icons/react";
 import type { ComponentProps, ReactNode } from "react";
 import { createContext, memo, useContext, useMemo, useState, useEffect, useRef } from "react";
 
@@ -175,9 +175,9 @@ export const ChainOfThoughtHeader = memo(
             )}
           </span>
           {isOpen ? (
-            <ChevronUpIcon className="size-4" />
+            <CaretUp className="size-4" />
           ) : (
-            <ChevronDownIcon className="size-4" />
+            <CaretDown className="size-4" />
           )}
         </CollapsibleTrigger>
       </Collapsible>
@@ -186,7 +186,7 @@ export const ChainOfThoughtHeader = memo(
 );
 
 export type ChainOfThoughtStepProps = ComponentProps<"div"> & {
-  icon?: LucideIcon;
+  icon?: Icon;
   label: ReactNode;
   description?: ReactNode;
   status?: "complete" | "active" | "pending";
@@ -195,7 +195,7 @@ export type ChainOfThoughtStepProps = ComponentProps<"div"> & {
 export const ChainOfThoughtStep = memo(
   ({
     className,
-    icon: Icon = DotIcon,
+    icon: StepIcon = Circle,
     label,
     description,
     status = "complete",
@@ -220,9 +220,9 @@ export const ChainOfThoughtStep = memo(
       >
         <div className="relative mt-0.5">
           {status === "active" ? (
-            <LoaderIcon className="size-4 animate-spin" />
+            <CircleNotch className="size-4 animate-spin" />
           ) : (
-            <Icon className="size-4" />
+            <StepIcon className="size-4" />
           )}
           <div className="-mx-px absolute top-7 bottom-0 left-1/2 w-px bg-border" />
         </div>

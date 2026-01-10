@@ -38,15 +38,15 @@ import {
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart } from "ai";
 import {
-  CornerDownLeftIcon,
-  ImageIcon,
-  Loader2Icon,
-  MicIcon,
-  PaperclipIcon,
-  PlusIcon,
-  SquareIcon,
-  XIcon,
-} from "lucide-react";
+  ArrowElbowDownLeft,
+  Image,
+  CircleNotch,
+  Microphone,
+  Paperclip,
+  Plus,
+  Square,
+  X,
+} from "@phosphor-icons/react";
 import { nanoid } from "nanoid";
 import {
   type ChangeEvent,
@@ -327,7 +327,7 @@ export function PromptInputAttachment({
               />
             ) : (
               <div className="flex size-5 items-center justify-center text-muted-foreground">
-                <PaperclipIcon className="size-3" />
+                <Paperclip className="size-3" />
               </div>
             )}
           </div>
@@ -340,7 +340,7 @@ export function PromptInputAttachment({
             }}
             variant="ghost"
           >
-            <XIcon />
+            <X />
             <span className="sr-only">Remove</span>
           </Button>
         </div>
@@ -427,7 +427,7 @@ export const PromptInputActionAddAttachments = ({
         attachments.openFileDialog();
       }}
     >
-      <ImageIcon className="mr-2 size-4" /> {label}
+      <Image className="mr-2 size-4" /> {label}
     </DropdownMenuItem>
   );
 };
@@ -998,7 +998,7 @@ export const PromptInputActionMenuTrigger = ({
   children,
   ...props
 }: PromptInputActionMenuTriggerProps) => (
-  <DropdownMenuTrigger render={<PromptInputButton className={className} {...props} />}>{children ?? <PlusIcon className="size-4" />}</DropdownMenuTrigger>
+  <DropdownMenuTrigger render={<PromptInputButton className={className} {...props} />}>{children ?? <Plus className="size-4" />}</DropdownMenuTrigger>
 );
 
 export type PromptInputActionMenuContentProps = ComponentProps<
@@ -1034,16 +1034,17 @@ export const PromptInputSubmit = ({
   size = "icon-sm",
   status,
   children,
+  onClick,
   ...props
 }: PromptInputSubmitProps) => {
-  let Icon = <CornerDownLeftIcon className="size-4" />;
+  let IconElement = <ArrowElbowDownLeft className="size-4" />;
 
   if (status === "submitted") {
-    Icon = <Loader2Icon className="size-4 animate-spin" />;
+    IconElement = <CircleNotch className="size-4 animate-spin" />;
   } else if (status === "streaming") {
-    Icon = <SquareIcon className="size-4" />;
+    IconElement = <Square className="size-4" />;
   } else if (status === "error") {
-    Icon = <XIcon className="size-4" />;
+    IconElement = <X className="size-4" />;
   }
 
   return (
@@ -1053,9 +1054,15 @@ export const PromptInputSubmit = ({
       size={size}
       type="submit"
       variant={variant}
+      onClick={(event) => {
+        onClick?.(event);
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        event.currentTarget.form?.requestSubmit();
+      }}
       {...props}
     >
-      {children ?? Icon}
+      {children ?? IconElement}
     </InputGroupButton>
   );
 };
@@ -1214,7 +1221,7 @@ export const PromptInputSpeechButton = ({
       onClick={toggleListening}
       {...props}
     >
-      <MicIcon className="size-4" />
+      <Microphone className="size-4" />
     </PromptInputButton>
   );
 };

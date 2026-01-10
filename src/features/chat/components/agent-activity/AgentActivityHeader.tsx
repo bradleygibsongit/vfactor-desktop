@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { ChevronUpIcon, ChevronDownIcon } from "lucide-react";
+import { CaretUp, CaretDown } from "@phosphor-icons/react";
 import { LoadingDots } from "@/features/shared/components/ui/loading-dots";
 import { cn } from "@/lib/utils";
 
@@ -117,9 +117,9 @@ export function AgentActivityHeader({
 
       {/* Chevron */}
       {isOpen ? (
-        <ChevronUpIcon className="size-4" />
+        <CaretUp className="size-4" />
       ) : (
-        <ChevronDownIcon className="size-4" />
+        <CaretDown className="size-4" />
       )}
     </button>
   );

@@ -1,30 +1,34 @@
 # Nucleus Desktop
 
-Desktop AI agent powered by Claude Agent SDK.
+Desktop AI agent app with Tauri + React.
 
 ## Project Overview
 
 This project is being built in phases:
 
-1. **Phase 1 (Current)**: CLI foundation with Claude Agent SDK
-2. **Phase 2**: Add Tauri + React for desktop UI
+1. **Phase 1 (Current)**: UI shell with Tauri + React
+2. **Phase 2**: Agent runtime integration
 3. **Phase 3**: Migrate UI components from claude-interface project
 
 ## Commands
 
 ```bash
-bun run start              # Run CLI (interactive mode)
-bun run start "prompt"     # Run single prompt
-bun run dev                # Run with watch mode
+bun run dev                # Run Vite dev server
+bun run tauri:dev          # Run Tauri app
+bun run cli "prompt"       # Run OpenCode CLI (streams by default)
+bun run cli "prompt" --stream-tools  # Stream tool activity
+bun run cli "prompt" --raw-only      # Only show raw response
+bun run cli "prompt" --json-only     # Only show raw JSON
 bun run typecheck          # TypeScript type checking
 ```
 
 ## Architecture
 
-### Current (Phase 1 - CLI)
+### Current (Phase 1 - UI shell)
 ```
 nucleus-desktop/
-├── index.ts               # CLI entry point with Agent SDK
+├── src/                   # React UI shell
+├── src-tauri/             # Tauri backend
 ├── package.json
 ├── tsconfig.json
 └── MIGRATION.md           # Detailed migration plan
@@ -35,11 +39,7 @@ nucleus-desktop/
 nucleus-desktop/
 ├── src/
 │   ├── main.ts            # Tauri main process
-│   ├── agent/             # Agent SDK integration
-│   │   ├── client.ts      # Core query wrapper
-│   │   ├── hooks/         # React hooks (useAgent, useMessages, etc.)
-│   │   ├── store/         # Zustand store for agent state
-│   │   └── types.ts       # SDK type re-exports and extensions
+│   ├── agent/             # Agent runtime integration (TBD)
 │   └── features/          # UI features (migrated from claude-interface)
 │       ├── chat/          # Chat UI components
 │       └── shared/        # Shared UI components
@@ -49,8 +49,9 @@ nucleus-desktop/
 
 ## Key Dependencies
 
-- `@anthropic-ai/claude-agent-sdk` - Claude Agent SDK (v0.2.2)
 - `bun` - JavaScript runtime and package manager
+- `@tauri-apps/cli` - Tauri app tooling
+- `@opencode-ai/sdk` - OpenCode SDK
 
 ## UI Migration Notes
 
@@ -62,7 +63,7 @@ The UI from `claude-interface` project will be migrated here. Key components to 
 - `ai-elements/` - Message, Conversation, Loader components
 - `shared/components/ui/` - Button, Input, Dialog, etc.
 
-These components have already been decoupled from the old ACP implementation and use local types compatible with the Agent SDK message format.
+These components have already been decoupled from the old ACP implementation and use local types compatible with a future agent runtime.
 
 ## Development Guidelines
 

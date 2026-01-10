@@ -18,12 +18,20 @@ export function TitleBar() {
   return (
     <header
       data-tauri-drag-region
-      className="h-8 flex items-center justify-end shrink-0 select-none bg-sidebar border-b border-sidebar-border"
+      className="h-10 flex items-center shrink-0 select-none bg-sidebar border-b border-sidebar-border"
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
     >
+      {/* Left - Space for macOS traffic lights */}
+      <div className="w-20 shrink-0 pointer-events-none" data-tauri-drag-region />
+
+      {/* Center - App title */}
+      <div className="flex-1 flex items-center justify-center pointer-events-none" data-tauri-drag-region>
+        <span className="text-sm font-medium text-foreground">Nucleus</span>
+      </div>
+
       {/* Right - Sidebar toggle buttons */}
-      <div className="flex items-center gap-1 pr-2">
+      <div className="w-20 shrink-0 flex items-center justify-end gap-1 pr-2">
         <button
           type="button"
           onClick={toggleLeft}

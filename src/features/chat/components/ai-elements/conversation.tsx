@@ -2,7 +2,7 @@
 
 import { Button } from "@/features/shared/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ArrowDownIcon } from "lucide-react";
+import { ArrowDown } from "@phosphor-icons/react";
 import type { ComponentProps } from "react";
 import { useCallback } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
@@ -93,7 +93,7 @@ export const ConversationScrollButton = ({
       variant="outline"
       {...props}
     >
-      <ArrowDownIcon className="size-4" />
+      <ArrowDown className="size-4" />
     </Button>
   );
 };

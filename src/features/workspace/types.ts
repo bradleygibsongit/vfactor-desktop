@@ -15,3 +15,10 @@ export interface Repository {
   collapsed: boolean
   workspaces: Workspace[]
 }
+
+export interface Project {
+  id: string
+  name: string       // Folder name (derived from path)
+  path: string       // Full filesystem path
+  addedAt: number    // Timestamp when added (for ordering)
+}
