@@ -18,6 +18,14 @@
     font-display: swap;
 }
 
+@font-face {
+    font-family: "Geist Pixel";
+    src: url("../node_modules/geist/dist/fonts/geist-pixel/GeistPixel-Square.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -112,6 +120,7 @@
 @theme inline {
     --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
     --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-pixel: "Geist Pixel", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --color-terminal: var(--terminal);
     --color-terminal-foreground: var(--terminal-foreground);
     --color-main-content: var(--main-content);

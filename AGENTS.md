@@ -1,6 +1,16 @@
 # Nucleus Desktop
 
-Desktop AI agent app with Tauri + React.
+Open-source desktop AI co-worker app with Tauri + React.
+
+## Product Direction
+
+Nucleus Desktop is intended to become an open-source analogue to Claude Cowork: a desktop agent workspace for knowledge work beyond coding.
+
+- The target experience is outcome-oriented task execution, not just turn-by-turn chat.
+- Users should be able to grant scoped access to local folders, tools, connectors, and browser workflows so the agent can complete multi-step work on their behalf.
+- The app should feel supervised and transparent: show plans, progress, sub-task activity, and require explicit approval for major or destructive actions.
+- Prioritize knowledge-work use cases such as research, report and document drafting, spreadsheet/presentation prep, file organization, and recurring operational tasks.
+- Keep provider-specific runtimes behind thin adapters so OpenCode, Codex, Claude Code, and future harnesses can power the same shared co-worker UX.
 
 ## Project Overview
 
@@ -77,3 +87,4 @@ These components have already been decoupled from the old ACP implementation and
 - The current chat runtime is still OpenCode-shaped end-to-end: Tauri starts `opencode serve --port 4096` in `src-tauri/src/lib.rs`, and the React chat store talks to it through `@opencode-ai/sdk/client` plus the global event stream in `src/features/chat/store/chatStore.ts`.
 - If adding multiple agent harnesses (OpenCode, Codex, Claude Code), keep orchestration out of this app and introduce a thin per-harness adapter that maps each provider into shared UI-local thread/message/tool/subagent types before data reaches hooks or components.
 - Codex is not a drop-in replacement for the OpenCode client. The closest fit is Codex App Server, which uses JSON-RPC `thread/*` and `turn/*` events instead of OpenCode's REST/SSE shape; prefer generating version-matched bindings with `codex app-server generate-ts` rather than hand-rolling protocol types.
+- Claude Cowork is a useful product reference: Anthropic positions it as Claude Code's agentic architecture packaged into Desktop for knowledge work beyond coding, with scoped file/tool access, visible planning, parallel sub-agents, plugins/skills, and explicit approval gates.

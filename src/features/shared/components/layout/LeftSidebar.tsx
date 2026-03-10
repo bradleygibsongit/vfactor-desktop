@@ -225,7 +225,7 @@ export function LeftSidebar({
 
   const BackIcon = SETTINGS_BACK_ICON
   const sidebarWidth = isCollapsed ? 48 : width
-  const sidebarTopInset = isCollapsed ? 38 : 44
+  const sidebarTopPadding = isCollapsed ? 12 : 16
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? orderedProjects[0] ?? null
   const expandedRowClass =
@@ -315,6 +315,10 @@ export function LeftSidebar({
     onOpenChat?.()
   }
 
+  if (isCollapsed) {
+    return null
+  }
+
   if (activeView === "settings") {
     return (
       <aside
@@ -325,15 +329,10 @@ export function LeftSidebar({
           isCollapsed ? "w-12" : "min-w-[240px] max-w-[420px]",
         )}
       >
-        <div
-          data-tauri-drag-region
-          className="absolute inset-x-0 top-0 z-0"
-          style={{ height: sidebarTopInset }}
-        />
         <div className="flex-1 overflow-y-auto">
           <div
             className={cn("px-2 pb-2", isCollapsed ? "space-y-1" : "space-y-2")}
-            style={{ paddingTop: sidebarTopInset }}
+            style={{ paddingTop: sidebarTopPadding }}
           >
             {isCollapsed ? (
               <Tooltip>
@@ -427,11 +426,6 @@ export function LeftSidebar({
           isCollapsed ? "w-12" : "min-w-[240px] max-w-[420px]"
         )}
       >
-        <div
-          data-tauri-drag-region
-          className="absolute inset-x-0 top-0 z-0"
-          style={{ height: sidebarTopInset }}
-        />
         {/* Loading state */}
         <div className="flex-1 flex items-center justify-center">
           <span className="text-sm text-muted-foreground">Loading...</span>
@@ -449,14 +443,9 @@ export function LeftSidebar({
           isCollapsed ? "w-12" : "min-w-[240px] max-w-[420px]"
         )}
       >
-      <div
-        data-tauri-drag-region
-        className="absolute inset-x-0 top-0 z-0"
-        style={{ height: sidebarTopInset }}
-      />
       {/* Scrollable content area */}
       <div className="flex-1 overflow-y-auto">
-        <div className="px-2 pb-2" style={{ paddingTop: sidebarTopInset }}>
+        <div className="px-2 pb-2" style={{ paddingTop: sidebarTopPadding }}>
           {isCollapsed ? (
             <div className="mb-3 space-y-1">
               <Tooltip>

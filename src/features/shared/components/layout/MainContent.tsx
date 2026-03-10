@@ -43,7 +43,6 @@ function TabContent({ tab }: TabContentProps) {
 }
 
 const CHAT_TAB: Tab = { id: "chat", type: "chat", title: "Chat" }
-const TOP_DRAG_STRIP_HEIGHT = 32
 
 interface MainContentProps {
   activeView: "chat" | "settings"
@@ -56,7 +55,6 @@ export function MainContent({ activeView, activeSettingsSection }: MainContentPr
   if (activeView === "settings") {
     return (
       <main className="flex-1 min-w-80 bg-main-content text-main-content-foreground overflow-hidden flex flex-col">
-        <div data-tauri-drag-region className="shrink-0" style={{ height: TOP_DRAG_STRIP_HEIGHT }} />
         <SettingsPage activeSection={activeSettingsSection} />
       </main>
     )
@@ -69,15 +67,12 @@ export function MainContent({ activeView, activeSettingsSection }: MainContentPr
   return (
     <main className="flex-1 min-w-80 bg-main-content text-main-content-foreground overflow-hidden flex flex-col">
       {!isChatTab && (
-        <>
-          <div data-tauri-drag-region className="shrink-0" style={{ height: TOP_DRAG_STRIP_HEIGHT }} />
-          <TabBar
-            tabs={tabsWithChat}
-            activeTabId={activeTabId ?? CHAT_TAB.id}
-            onTabChange={setActiveTab}
-            onTabClose={closeTab}
-          />
-        </>
+        <TabBar
+          tabs={tabsWithChat}
+          activeTabId={activeTabId ?? CHAT_TAB.id}
+          onTabChange={setActiveTab}
+          onTabClose={closeTab}
+        />
       )}
       <div className="flex-1 overflow-hidden">
         <TabContent tab={activeTab} />

@@ -11,8 +11,6 @@ interface RightSidebarProps {
   activeView?: "chat" | "settings"
 }
 
-const TOP_DRAG_STRIP_HEIGHT = 32
-
 export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
   const [fileTreeData, setFileTreeData] = useState<Record<string, FileTreeItem>>({})
   const [isInitialLoad, setIsInitialLoad] = useState(true)
@@ -99,7 +97,6 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
 
   return (
     <aside className="w-[400px] max-w-[400px] min-w-48 shrink bg-sidebar text-sidebar-foreground border-l border-sidebar-border flex flex-col">
-      <div data-tauri-drag-region className="shrink-0" style={{ height: TOP_DRAG_STRIP_HEIGHT }} />
       {/* Header */}
       <div className="h-12 bg-sidebar border-b border-sidebar-border flex items-center px-4 shrink-0">
         <span className="text-sm text-sidebar-foreground">Files</span>

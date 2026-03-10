@@ -4,6 +4,7 @@ import { MainContent } from "./MainContent"
 import { RightSidebar } from "./RightSidebar"
 import { SidebarProvider } from "./SidebarContext"
 import { RightSidebarProvider } from "./RightSidebarContext"
+import { TitleBar } from "./TitleBar"
 import type { SettingsSectionId } from "@/features/settings/config"
 
 export function AppLayout() {
@@ -13,19 +14,25 @@ export function AppLayout() {
   return (
     <SidebarProvider>
       <RightSidebarProvider>
-        <div className="flex h-screen overflow-hidden bg-transparent">
-          <LeftSidebar
+        <div className="flex h-screen flex-col overflow-hidden bg-transparent">
+          <TitleBar
             activeView={activeView}
-            activeSettingsSection={activeSettingsSection}
             onOpenChat={() => setActiveView("chat")}
-            onOpenSettings={() => setActiveView("settings")}
-            onSelectSettingsSection={setActiveSettingsSection}
           />
-          <MainContent
-            activeView={activeView}
-            activeSettingsSection={activeSettingsSection}
-          />
-          <RightSidebar activeView={activeView} />
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <LeftSidebar
+              activeView={activeView}
+              activeSettingsSection={activeSettingsSection}
+              onOpenChat={() => setActiveView("chat")}
+              onOpenSettings={() => setActiveView("settings")}
+              onSelectSettingsSection={setActiveSettingsSection}
+            />
+            <MainContent
+              activeView={activeView}
+              activeSettingsSection={activeSettingsSection}
+            />
+            <RightSidebar activeView={activeView} />
+          </div>
         </div>
       </RightSidebarProvider>
     </SidebarProvider>
