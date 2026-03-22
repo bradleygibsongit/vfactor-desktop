@@ -5,15 +5,19 @@ import type {
   HarnessPromptInput,
   HarnessTurnInput,
   HarnessTurnResult,
+  RuntimeModel,
   RuntimePrompt,
   RuntimeSession,
 } from "../types"
+import { getRuntimeModelLabel } from "../domain/runtimeModels"
 import { getRemoteSessionId } from "../domain/runtimeSessions"
 import { mapTurnItemsToMessages } from "./codexMessageMapper"
 import {
   mapReasoningEffort,
   mapThreadToSession,
   readCodexTurn,
+  type CodexModel,
+  type CodexModelListResponse,
   TURN_SYNC_INTERVAL_MS,
   type CodexServerRequestResolvedNotification,
   type CodexThread,
@@ -70,6 +74,56 @@ export class CodexHarnessAdapter implements HarnessAdapter {
     return []
   }
 
+  async listModels(): Promise<RuntimeModel[]> {
+    await this.initialize()
+
+    const models: RuntimeModel[] = []
+    let cursor: string | null = null
+
+    do {
+      const params: { limit: number; includeHidden: boolean; cursor?: string } = {
+        limit: 100,
+        includeHidden: false,
+      }
+
+      if (cursor) {
+        params.cursor = cursor
+      }
+
+      const response: CodexModelListResponse = await this.rpc.request("model/list", params)
+
+      models.push(
+        ...response.data.map((model: CodexModel) => ({
+          id: model.id || model.model,
+          displayName: getRuntimeModelLabel({
+            displayName: model.displayName,
+            id: model.model || model.id,
+          }),
+          isDefault: model.isDefault ?? false,
+          defaultReasoningEffort: model.defaultReasoningEffort ?? null,
+          supportedReasoningEfforts:
+            model.supportedReasoningEfforts
+              ?.map((entry: { reasoningEffort: string }) => entry.reasoningEffort)
+              .filter((value: string): value is string => value.length > 0) ?? [],
+        }))
+      )
+
+      cursor = response.nextCursor
+    } while (cursor)
+
+    const uniqueModels = Array.from(new Map(models.map((model) => [model.id, model])).values())
+
+    uniqueModels.sort((left, right) => {
+      if (left.isDefault !== right.isDefault) {
+        return left.isDefault ? -1 : 1
+      }
+
+      return left.displayName.localeCompare(right.displayName)
+    })
+
+    return uniqueModels
+  }
+
   async searchFiles() {
     return []
   }
@@ -79,6 +133,7 @@ export class CodexHarnessAdapter implements HarnessAdapter {
     const response = await this.rpc.request<CodexTurnStartResponse>("turn/start", {
       threadId,
       cwd: input.projectPath ?? input.session.projectPath ?? null,
+      model: input.model ?? null,
       collaborationMode: input.collaborationMode
         ? {
             mode: input.collaborationMode,

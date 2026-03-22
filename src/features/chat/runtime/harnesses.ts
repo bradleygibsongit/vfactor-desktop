@@ -35,6 +35,10 @@ class PlaceholderHarnessAdapter implements HarnessAdapter {
     return []
   }
 
+  async listModels() {
+    return []
+  }
+
   async searchFiles() {
     return []
   }
@@ -112,7 +116,7 @@ const HARNESS_ADAPTERS = Object.fromEntries(
       ? new CodexHarnessAdapter(definition)
       : new PlaceholderHarnessAdapter(definition),
   ])
-) as Record<HarnessId, HarnessAdapter>
+) as unknown as Record<HarnessId, HarnessAdapter>
 
 export function listHarnesses(): HarnessDefinition[] {
   return HARNESS_DEFINITIONS

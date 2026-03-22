@@ -1,13 +1,22 @@
 use serde::Serialize;
 use std::env;
 use std::fs;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
-use tauri::{Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+const CODEX_RPC_MESSAGE_EVENT: &str = "codex-rpc:message";
+const CODEX_RPC_STATUS_EVENT: &str = "codex-rpc:status";
 
 struct CodexServer {
-    process: Mutex<Option<Child>>,
+    state: Mutex<CodexServerState>,
+}
+
+struct CodexServerState {
+    process: Option<Child>,
+    stdin: Option<ChildStdin>,
 }
 
 #[derive(Serialize)]
@@ -37,40 +46,61 @@ struct ParsedSkillDocument {
 }
 
 #[tauri::command]
-async fn start_codex_server(state: State<'_, CodexServer>) -> Result<String, String> {
-    let mut process_guard = state.process.lock().map_err(|e| e.to_string())?;
+async fn ensure_codex_server(app: AppHandle, state: State<'_, CodexServer>) -> Result<String, String> {
+    let mut server_state = state.state.lock().map_err(|e| e.to_string())?;
 
-    if let Some(ref mut child) = *process_guard {
+    if let Some(ref mut child) = server_state.process {
         match child.try_wait() {
             Ok(Some(_)) => {
-                *process_guard = None;
+                server_state.process = None;
+                server_state.stdin = None;
             }
             Ok(None) => {
                 return Ok("Codex App Server already running".to_string());
             }
             Err(e) => {
                 log::warn!("Error checking Codex App Server status: {}", e);
-                *process_guard = None;
+                server_state.process = None;
+                server_state.stdin = None;
             }
         }
     }
 
-    let child = Command::new("codex")
-        .args(["app-server", "--listen", "ws://127.0.0.1:4500"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+    let mut child = Command::new("codex")
+        .arg("app-server")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to start Codex App Server: {}", e))?;
 
-    *process_guard = Some(child);
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "Failed to capture Codex App Server stdin".to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Failed to capture Codex App Server stdout".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Failed to capture Codex App Server stderr".to_string())?;
+
+    spawn_codex_stdout_pump(app.clone(), stdout);
+    spawn_codex_stderr_pump(stderr);
+
+    server_state.process = Some(child);
+    server_state.stdin = Some(stdin);
     Ok("Codex App Server started".to_string())
 }
 
 #[tauri::command]
 async fn stop_codex_server(state: State<'_, CodexServer>) -> Result<String, String> {
-    let mut process_guard = state.process.lock().map_err(|e| e.to_string())?;
+    let mut server_state = state.state.lock().map_err(|e| e.to_string())?;
 
-    if let Some(mut child) = process_guard.take() {
+    if let Some(mut child) = server_state.process.take() {
+        server_state.stdin = None;
         child
             .kill()
             .map_err(|e| format!("Failed to stop Codex App Server: {}", e))?;
@@ -81,6 +111,73 @@ async fn stop_codex_server(state: State<'_, CodexServer>) -> Result<String, Stri
     } else {
         Ok("Codex App Server was not running".to_string())
     }
+}
+
+#[tauri::command]
+async fn codex_rpc_send(state: State<'_, CodexServer>, message: String) -> Result<(), String> {
+    let mut server_state = state.state.lock().map_err(|e| e.to_string())?;
+
+    let stdin = server_state
+        .stdin
+        .as_mut()
+        .ok_or_else(|| "Codex App Server is not connected".to_string())?;
+
+    stdin
+        .write_all(message.as_bytes())
+        .map_err(|e| format!("Failed to write to Codex App Server stdin: {}", e))?;
+    stdin
+        .write_all(b"\n")
+        .map_err(|e| format!("Failed to terminate Codex App Server message: {}", e))?;
+    stdin
+        .flush()
+        .map_err(|e| format!("Failed to flush Codex App Server stdin: {}", e))?;
+
+    Ok(())
+}
+
+fn spawn_codex_stdout_pump(app: AppHandle, stdout: ChildStdout) {
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+
+        for line in reader.lines() {
+            match line {
+                Ok(payload) => {
+                    if payload.trim().is_empty() {
+                        continue;
+                    }
+
+                    if let Err(error) = app.emit(CODEX_RPC_MESSAGE_EVENT, payload) {
+                        log::warn!("Failed to emit Codex App Server message event: {}", error);
+                    }
+                }
+                Err(error) => {
+                    log::warn!("Failed reading Codex App Server stdout: {}", error);
+                    break;
+                }
+            }
+        }
+
+        let _ = app.emit(CODEX_RPC_STATUS_EVENT, "closed");
+    });
+}
+
+fn spawn_codex_stderr_pump(stderr: ChildStderr) {
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+
+        for line in reader.lines() {
+            match line {
+                Ok(message) if !message.trim().is_empty() => {
+                    log::warn!("Codex App Server stderr: {}", message);
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    log::warn!("Failed reading Codex App Server stderr: {}", error);
+                    break;
+                }
+            }
+        }
+    });
 }
 
 #[tauri::command]
@@ -303,10 +400,14 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_http::init())
         .manage(CodexServer {
-            process: Mutex::new(None),
+            state: Mutex::new(CodexServerState {
+                process: None,
+                stdin: None,
+            }),
         })
         .invoke_handler(tauri::generate_handler![
-            start_codex_server,
+            ensure_codex_server,
+            codex_rpc_send,
             stop_codex_server,
             list_skills,
         ])
@@ -323,12 +424,13 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 let state: State<CodexServer> = window.state();
-                let mut process_guard = match state.process.lock() {
+                let mut server_state = match state.state.lock() {
                     Ok(guard) => guard,
                     Err(_) => return,
                 };
 
-                if let Some(mut child) = process_guard.take() {
+                if let Some(mut child) = server_state.process.take() {
+                    server_state.stdin = None;
                     let _ = child.kill();
                     let _ = child.wait();
                 }

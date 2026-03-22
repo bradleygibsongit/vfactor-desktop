@@ -1,13 +1,14 @@
-import { ArrowUp02, Brain, CaretDown, CheckCircle, Circle, Stop } from "@/components/icons"
+import { ArrowUp02, Brain, CaretDown, CheckCircle, Circle, DocumentValidation, Stop } from "@/components/icons"
 import { useState, useRef, useCallback, useMemo, useEffect, type KeyboardEvent as ReactKeyboardEvent, type FormEvent } from "react"
 import { SlashCommandMenu } from "./SlashCommandMenu"
 import { AtMentionMenu, type FileItem } from "./AtMentionMenu"
 import { useCommands, type NormalizedCommand } from "../hooks/useCommands"
 import { useAgents, type NormalizedAgent } from "../hooks/useAgents"
 import { useFileSearch } from "../hooks/useFileSearch"
-import type { HarnessDefinition, HarnessId, RuntimePromptResponse } from "../types"
+import { useModels } from "../hooks/useModels"
+import type { RuntimePromptResponse, RuntimeReasoningEffort } from "../types"
 import type { ComposerPlan, ComposerPrompt } from "./composer/types"
-import { REASONING_EFFORTS, getModelsForHarness } from "./composer/types"
+import { getRuntimeModelLabel } from "../domain/runtimeModels"
 import {
   createRuntimeApprovalResponse,
   createRuntimePromptResponse,
@@ -26,6 +27,11 @@ import {
   DropdownMenuTrigger,
 } from "@/features/shared/components/ui/dropdown-menu"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/features/shared/components/ui/tooltip"
+import {
   $createTextNode,
   $getRoot,
   $getSelection,
@@ -38,19 +44,6 @@ import {
 import { $createSkillChipNode, $isSkillChipNode, SkillChipNode } from "./SkillChipNode"
 import { cn } from "@/lib/utils"
 
-function getCodexModelId(model: string): string {
-  switch (model) {
-    case "GPT-5.4":
-      return "gpt-5.4"
-    case "GPT-5":
-      return "gpt-5"
-    case "GPT-5 mini":
-      return "gpt-5-mini"
-    default:
-      return model.toLowerCase().replace(/\s+/g, "-")
-  }
-}
-
 interface ChatInputProps {
   input: string
   setInput: (value: string) => void
@@ -60,19 +53,24 @@ interface ChatInputProps {
       agent?: string
       collaborationMode?: "default" | "plan"
       model?: string
-      reasoningEffort?: "low" | "medium" | "high" | null
+      reasoningEffort?: string | null
     }
   ) => void
   onAbort?: () => void
   onExecuteCommand?: (command: string, args?: string) => void
-  harnesses: HarnessDefinition[]
-  selectedHarnessId: HarnessId | null
-  onSelectHarness?: (harnessId: HarnessId) => void
   status: "idle" | "streaming" | "error"
   activePlan?: ComposerPlan | null
   prompt?: ComposerPrompt | null
   onAnswerPrompt?: (response: RuntimePromptResponse) => void
   onDismissPrompt?: () => void
+}
+
+function formatReasoningEffortLabel(value: string): string {
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
 }
 
 export function ChatInput({
@@ -81,9 +79,6 @@ export function ChatInput({
   onSubmit,
   onAbort,
   onExecuteCommand,
-  harnesses,
-  selectedHarnessId,
-  onSelectHarness,
   status,
   activePlan,
   prompt,
@@ -99,12 +94,9 @@ export function ChatInput({
   const [promptAnswers, setPromptAnswers] = useState<Record<string, string | string[]>>({})
   const [promptCustomAnswers, setPromptCustomAnswers] = useState<Record<string, string>>({})
   const [currentPromptQuestionIndex, setCurrentPromptQuestionIndex] = useState(0)
-  const availableModels = useMemo(
-    () => getModelsForHarness(selectedHarnessId),
-    [selectedHarnessId]
-  )
-  const [selectedModel, setSelectedModel] = useState(availableModels[0] ?? "Default model")
-  const [reasoningEffort, setReasoningEffort] = useState<(typeof REASONING_EFFORTS)[number]>("High")
+  const { models: availableModels, isLoading: isLoadingModels } = useModels()
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
+  const [reasoningEffort, setReasoningEffort] = useState<RuntimeReasoningEffort | null>(null)
   const editorRef = useRef<LexicalEditor | null>(null)
   const serializedComposerValueRef = useRef(input)
   const previousCommandSignatureRef = useRef("")
@@ -112,8 +104,29 @@ export function ChatInput({
   const { commands, isLoading: isLoadingCommands } = useCommands()
   const { agents, isLoading: isLoadingAgents } = useAgents()
   const { results: fileResults, isLoading: isLoadingFiles, search: searchFiles, clear: clearFiles } = useFileSearch()
-  const selectedHarness = harnesses.find((harness) => harness.id === selectedHarnessId) ?? null
-  const isPlanModeAvailable = selectedHarnessId === "codex"
+  const selectedModel = useMemo(
+    () => availableModels.find((model) => model.id === selectedModelId) ?? null,
+    [availableModels, selectedModelId]
+  )
+  const availableReasoningEfforts = useMemo(() => {
+    const supported = selectedModel?.supportedReasoningEfforts?.filter((effort) => effort.trim().length > 0) ?? []
+    const defaultEffort = selectedModel?.defaultReasoningEffort?.trim() ?? null
+
+    if (supported.length > 0) {
+      return Array.from(new Set(supported))
+    }
+
+    return defaultEffort ? [defaultEffort] : []
+  }, [selectedModel])
+  const selectedModelLabel = selectedModel
+    ? getRuntimeModelLabel(selectedModel)
+    : (isLoadingModels ? "Loading models..." : "Default model")
+  const reasoningEffortLabel = reasoningEffort
+    ? formatReasoningEffortLabel(reasoningEffort)
+    : isLoadingModels
+      ? "Loading effort..."
+      : "Default"
+  const isPlanModeAvailable = true
   const skillCommands = useMemo(
     () => commands.filter((command) => !!command.referenceName),
     [commands]
@@ -167,8 +180,40 @@ export function ChatInput({
   }, [prompt?.id])
 
   useEffect(() => {
-    setSelectedModel(availableModels[0] ?? "Default model")
+    if (availableModels.length === 0) {
+      setSelectedModelId(null)
+      return
+    }
+
+    setSelectedModelId((current) => {
+      if (current && availableModels.some((model) => model.id === current)) {
+        return current
+      }
+
+      return availableModels.find((model) => model.isDefault)?.id ?? availableModels[0]?.id ?? null
+    })
   }, [availableModels])
+
+  useEffect(() => {
+    if (availableReasoningEfforts.length === 0) {
+      setReasoningEffort(null)
+      return
+    }
+
+    const defaultEffort = selectedModel?.defaultReasoningEffort?.trim() ?? null
+
+    setReasoningEffort((current) => {
+      if (current && availableReasoningEfforts.includes(current)) {
+        return current
+      }
+
+      if (defaultEffort && availableReasoningEfforts.includes(defaultEffort)) {
+        return defaultEffort
+      }
+
+      return availableReasoningEfforts[0] ?? null
+    })
+  }, [availableReasoningEfforts, selectedModel?.defaultReasoningEffort])
 
   useEffect(() => {
     if (!isPlanModeAvailable) {
@@ -638,22 +683,19 @@ export function ChatInput({
       const collaborationMode = isPlanModeAvailable
         ? (isPlanModeEnabled ? "plan" : "default")
         : undefined
-      const reasoningEffortValue =
-        reasoningEffort.toLowerCase() as "low" | "medium" | "high"
-      const selectedModelId = isPlanModeAvailable ? getCodexModelId(selectedModel) : selectedModel
       if (agentMatch) {
         const [, agentName, message] = agentMatch
         onSubmit(message.trim(), {
           agent: agentName,
           collaborationMode,
-          model: selectedModelId,
-          reasoningEffort: collaborationMode ? reasoningEffortValue : null,
+          model: selectedModelId ?? undefined,
+          reasoningEffort: collaborationMode ? reasoningEffort : null,
         })
       } else {
         onSubmit(input.trim(), {
           collaborationMode,
-          model: selectedModelId,
-          reasoningEffort: collaborationMode ? reasoningEffortValue : null,
+          model: selectedModelId ?? undefined,
+          reasoningEffort: collaborationMode ? reasoningEffort : null,
         })
       }
     },
@@ -669,7 +711,7 @@ export function ChatInput({
       promptCustomAnswers,
       isPlanModeAvailable,
       isPlanModeEnabled,
-      selectedModel,
+      selectedModelId,
       reasoningEffort,
       currentPromptQuestion,
       currentPromptQuestionAnswered,
@@ -1007,86 +1049,76 @@ export function ChatInput({
 
           {!isPromptActive && (
             <div className="mt-4 flex items-center gap-2">
-              {selectorsRow && selectedHarness && (
-              <DropdownMenu>
-                <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 px-1 text-sm text-muted-foreground transition-colors hover:text-foreground cursor-pointer">
-                  <span>{selectedHarness.label}</span>
-                  <CaretDown className="size-3 text-muted-foreground" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  {harnesses.map((harness) => (
-                    <DropdownMenuItem
-                      key={harness.id}
-                      onClick={() => onSelectHarness?.(harness.id)}
-                      className="flex flex-col items-start gap-0.5"
-                    >
-                      <div className="flex w-full items-center justify-between gap-3">
-                        <span className="font-medium">{harness.label}</span>
-                        <span className="text-sm uppercase tracking-wide text-muted-foreground">
-                          {harness.adapterStatus}
-                        </span>
-                      </div>
-                      <span className="text-sm text-muted-foreground">
-                        {harness.description}
-                      </span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              )}
-
-              {selectorsRow && isPlanModeAvailable && (
-              <button
-                type="button"
-                onClick={() => setIsPlanModeEnabled((current) => !current)}
-                className={`inline-flex h-8 items-center gap-2 rounded-full border px-2.5 text-sm transition-colors ${
-                  isPlanModeEnabled
-                    ? "border-border bg-muted text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Brain className="size-3.5" />
-                <span>Plan mode</span>
-              </button>
-              )}
-
               {selectorsRow && <DropdownMenu>
               <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 px-1 text-sm text-muted-foreground transition-colors hover:text-foreground cursor-pointer">
-                <span>{selectedModel}</span>
+                <span>{selectedModelLabel}</span>
                 <CaretDown className="size-3 text-muted-foreground" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
-                {availableModels.map((model) => (
-                  <DropdownMenuItem
-                    key={model}
-                    onClick={() => setSelectedModel(model)}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <span>{model}</span>
-                    {model === selectedModel && <CheckCircle className="size-3.5 text-muted-foreground" />}
+                {availableModels.length > 0 ? (
+                  availableModels.map((model) => (
+                    <DropdownMenuItem
+                      key={model.id}
+                      onClick={() => setSelectedModelId(model.id)}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <span>{getRuntimeModelLabel(model)}</span>
+                      {model.id === selectedModelId && <CheckCircle className="size-3.5 text-muted-foreground" />}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled>
+                    <span>{isLoadingModels ? "Loading models..." : "No models available"}</span>
                   </DropdownMenuItem>
-                ))}
+                )}
               </DropdownMenuContent>
               </DropdownMenu>}
 
               {selectorsRow && <DropdownMenu>
               <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 px-1 text-sm text-muted-foreground transition-colors hover:text-foreground cursor-pointer">
-                <span>{reasoningEffort}</span>
+                <span>{reasoningEffortLabel}</span>
                 <CaretDown className="size-3 text-muted-foreground" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-40">
-                {REASONING_EFFORTS.map((effort) => (
-                  <DropdownMenuItem
-                    key={effort}
-                    onClick={() => setReasoningEffort(effort)}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <span>{effort}</span>
-                    {effort === reasoningEffort && <CheckCircle className="size-3.5 text-muted-foreground" />}
+                {availableReasoningEfforts.length > 0 ? (
+                  availableReasoningEfforts.map((effort) => (
+                    <DropdownMenuItem
+                      key={effort}
+                      onClick={() => setReasoningEffort(effort)}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <span>{formatReasoningEffortLabel(effort)}</span>
+                      {effort === reasoningEffort && <CheckCircle className="size-3.5 text-muted-foreground" />}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled>
+                    <span>{isLoadingModels ? "Loading effort..." : "No effort options"}</span>
                   </DropdownMenuItem>
-                ))}
+                )}
               </DropdownMenuContent>
               </DropdownMenu>}
+
+              {selectorsRow && isPlanModeAvailable && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setIsPlanModeEnabled((current) => !current)}
+                    aria-label="Toggle plan mode"
+                    className={cn(
+                      "inline-flex h-8 w-8 items-center justify-center rounded-full",
+                      isPlanModeEnabled
+                        ? "text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <DocumentValidation className="size-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Plan mode</TooltipContent>
+              </Tooltip>
+              )}
 
               <div className="ml-auto flex items-center gap-2">
                 {isStreaming ? (

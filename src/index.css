@@ -83,6 +83,7 @@
     --chat-approval-emphasis: oklch(0.72 0.14 78);
     --chat-approval-emphasis-foreground: oklch(0.26 0.035 70);
     --scrollbar-thumb: oklch(0.62 0 0 / 0.78);
+    --app-text-size: 13px;
 }
 
 .dark {
@@ -139,6 +140,7 @@
     --chat-approval-emphasis: oklch(0.77 0.125 80);
     --chat-approval-emphasis-foreground: oklch(0.23 0.03 72);
     --scrollbar-thumb: oklch(0.44 0 0 / 0.92);
+    --app-text-size: 13px;
 }
 
 @theme inline {
@@ -192,6 +194,8 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    --text-sm: var(--app-text-size);
+    --text-sm--line-height: 1.25rem;
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
     --radius-lg: var(--radius);
@@ -320,7 +324,25 @@
 }
 
 [data-streamdown="code-block"] {
-  @apply my-4 rounded-lg overflow-hidden border border-border;
+  @apply my-4 overflow-hidden border border-border bg-card;
+}
+
+[data-streamdown="code-block-header"] {
+  @apply border-b border-border bg-muted/70 text-muted-foreground;
+}
+
+[data-streamdown="code-block-body"] {
+  @apply overflow-x-auto bg-card p-4 text-sm leading-6;
+  background-color: color-mix(in oklab, var(--color-card) 94%, white 6%) !important;
+  color: var(--color-foreground) !important;
+}
+
+[data-streamdown="code-block-body"] code {
+  @apply font-mono;
+}
+
+[data-streamdown="code-block-body"] span[style] {
+  filter: brightness(1.18) saturate(1.08);
 }
 
 [data-streamdown="unordered-list"] {

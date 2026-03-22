@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core"
+import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 
-const CODEX_WS_URL = "ws://127.0.0.1:4500"
-const CONNECT_RETRY_ATTEMPTS = 20
-const CONNECT_RETRY_DELAY_MS = 300
+const CODEX_RPC_MESSAGE_EVENT = "codex-rpc:message"
+const CODEX_RPC_STATUS_EVENT = "codex-rpc:status"
 
 interface JsonRpcRequest {
   jsonrpc: "2.0"
@@ -41,7 +41,7 @@ export interface JsonRpcNotification<T = unknown> {
 }
 
 type PendingRequest = {
-  resolve: (value: unknown) => void
+  resolve: (value: any) => void
   reject: (error: Error) => void
 }
 
@@ -68,20 +68,18 @@ function isJsonRpcResponse(
   return "id" in value && !("method" in value)
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 export class CodexRpcClient {
-  private socket: WebSocket | null = null
   private connectPromise: Promise<void> | null = null
+  private isConnected = false
+  private messageUnlisten: UnlistenFn | null = null
+  private statusUnlisten: UnlistenFn | null = null
   private nextRequestId = 1
   private pendingRequests = new Map<number, PendingRequest>()
   private listeners = new Set<NotificationListener>()
   private serverRequestListeners = new Set<ServerRequestListener>()
 
   async connect(): Promise<void> {
-    if (this.socket?.readyState === WebSocket.OPEN) {
+    if (this.isConnected) {
       return
     }
 
@@ -101,7 +99,7 @@ export class CodexRpcClient {
   async request<T>(method: string, params?: unknown): Promise<T> {
     await this.connect()
 
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+    if (!this.isConnected) {
       throw new Error("Codex App Server is not connected")
     }
 
@@ -117,36 +115,34 @@ export class CodexRpcClient {
       this.pendingRequests.set(id, { resolve, reject })
     })
 
-    this.socket.send(JSON.stringify(payload))
+    try {
+      await this.send(payload)
+    } catch (error) {
+      this.pendingRequests.delete(id)
+      throw error
+    }
+
     return responsePromise
   }
 
   notify(method: string, params?: unknown): void {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      return
-    }
-
-    this.socket.send(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        method,
-        params,
-      })
-    )
+    void this.send({
+      jsonrpc: "2.0",
+      method,
+      params,
+    }).catch(() => {
+      // Ignore best-effort notification failures.
+    })
   }
 
   respond(id: number | string, result: unknown): void {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      return
-    }
-
-    this.socket.send(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id,
-        result,
-      })
-    )
+    void this.send({
+      jsonrpc: "2.0",
+      id,
+      result,
+    }).catch(() => {
+      // Ignore best-effort response failures.
+    })
   }
 
   onNotification(listener: NotificationListener): () => void {
@@ -184,33 +180,39 @@ export class CodexRpcClient {
   }
 
   private async connectInternal(): Promise<void> {
-    if (await this.tryOpenSocket()) {
-      return
-    }
+    await this.attachTransportListeners()
+    await invoke<string>("ensure_codex_server")
 
-    await invoke<string>("start_codex_server")
-
-    for (let attempt = 0; attempt < CONNECT_RETRY_ATTEMPTS; attempt += 1) {
-      if (await this.tryOpenSocket()) {
-        return
-      }
-      await sleep(CONNECT_RETRY_DELAY_MS)
-    }
-
-    throw new Error("Unable to connect to Codex App Server")
-  }
-
-  private async tryOpenSocket(): Promise<boolean> {
-    if (this.socket?.readyState === WebSocket.OPEN) {
-      return true
-    }
+    this.isConnected = true
 
     try {
-      const socket = await this.openSocket(CODEX_WS_URL)
-      this.socket = socket
-      this.attachSocket(socket)
+      await this.sendInitialize()
+    } catch (error) {
+      this.resetConnection()
+      throw error
+    }
+  }
 
-      await this.request("initialize", {
+  private async attachTransportListeners(): Promise<void> {
+    if (!this.messageUnlisten) {
+      this.messageUnlisten = await listen<string>(CODEX_RPC_MESSAGE_EVENT, (event) => {
+        this.handleMessage(event.payload)
+      })
+    }
+
+    if (!this.statusUnlisten) {
+      this.statusUnlisten = await listen<string>(CODEX_RPC_STATUS_EVENT, (event) => {
+        if (event.payload === "closed") {
+          this.rejectPendingRequests("Codex App Server connection closed")
+          this.resetConnection()
+        }
+      })
+    }
+  }
+
+  private async sendInitialize(): Promise<void> {
+    try {
+      await this.sendRequestWithoutReconnect("initialize", {
         clientInfo: {
           name: "nucleus-desktop",
           title: "Nucleus Desktop",
@@ -222,87 +224,87 @@ export class CodexRpcClient {
         },
       })
       this.notify("initialized")
-      return true
-    } catch {
-      this.resetSocket()
-      return false
+    } catch (error) {
+      if (error instanceof Error && error.message === "Already initialized") {
+        return
+      }
+
+      throw error
     }
   }
 
-  private openSocket(url: string): Promise<WebSocket> {
-    return new Promise((resolve, reject) => {
-      const socket = new WebSocket(url)
+  private async sendRequestWithoutReconnect<T>(method: string, params?: unknown): Promise<T> {
+    if (!this.isConnected) {
+      throw new Error("Codex App Server is not connected")
+    }
 
-      const cleanup = () => {
-        socket.removeEventListener("open", handleOpen)
-        socket.removeEventListener("error", handleError)
-      }
+    const id = this.nextRequestId++
+    const payload: JsonRpcRequest = {
+      jsonrpc: "2.0",
+      id,
+      method,
+      params,
+    }
 
-      const handleOpen = () => {
-        cleanup()
-        resolve(socket)
-      }
-
-      const handleError = () => {
-        cleanup()
-        try {
-          socket.close()
-        } catch {
-          // Ignore close failures during connection attempts.
-        }
-        reject(new Error("Failed to open Codex App Server WebSocket"))
-      }
-
-      socket.addEventListener("open", handleOpen)
-      socket.addEventListener("error", handleError)
+    const responsePromise = new Promise<T>((resolve, reject) => {
+      this.pendingRequests.set(id, { resolve, reject })
     })
+
+    try {
+      await this.send(payload)
+    } catch (error) {
+      this.pendingRequests.delete(id)
+      throw error
+    }
+
+    return responsePromise
   }
 
-  private attachSocket(socket: WebSocket): void {
-    socket.addEventListener("message", (event) => {
-      const payload = JSON.parse(String(event.data)) as
-        | JsonRpcSuccess
-        | JsonRpcError
-        | JsonRpcNotification
-        | JsonRpcServerRequest
+  private async send(payload: JsonRpcRequest | JsonRpcNotification | { jsonrpc: "2.0"; id: number | string; result: unknown }): Promise<void> {
+    try {
+      await invoke("codex_rpc_send", {
+        message: JSON.stringify(payload),
+      })
+    } catch (error) {
+      this.resetConnection()
+      throw error
+    }
+  }
 
-      if (isJsonRpcResponse(payload)) {
-        const pending = this.pendingRequests.get(payload.id)
-        if (!pending) {
-          return
-        }
+  private handleMessage(rawPayload: string): void {
+    const payload = JSON.parse(rawPayload) as
+      | JsonRpcSuccess
+      | JsonRpcError
+      | JsonRpcNotification
+      | JsonRpcServerRequest
 
-        this.pendingRequests.delete(payload.id)
-
-        if ("error" in payload) {
-          pending.reject(new Error(payload.error.message))
-        } else {
-          pending.resolve(payload.result)
-        }
-
+    if (isJsonRpcResponse(payload)) {
+      const pending = this.pendingRequests.get(payload.id)
+      if (!pending) {
         return
       }
 
-      if ("id" in payload && "method" in payload) {
-        for (const listener of this.serverRequestListeners) {
-          listener(payload)
-        }
-        return
+      this.pendingRequests.delete(payload.id)
+
+      if ("error" in payload) {
+        pending.reject(new Error(payload.error.message))
+      } else {
+        pending.resolve(payload.result)
       }
 
-      for (const listener of this.listeners) {
+      return
+    }
+
+    if ("id" in payload && "method" in payload) {
+      for (const listener of this.serverRequestListeners) {
         listener(payload)
       }
-    })
+      return
+    }
 
-    socket.addEventListener("close", () => {
-      this.rejectPendingRequests("Codex App Server connection closed")
-      this.resetSocket()
-    })
-
-    socket.addEventListener("error", () => {
-      this.rejectPendingRequests("Codex App Server connection error")
-    })
+    for (const listener of this.listeners) {
+      listener(payload)
+    }
   }
 
   private rejectPendingRequests(message: string): void {
@@ -312,8 +314,8 @@ export class CodexRpcClient {
     this.pendingRequests.clear()
   }
 
-  private resetSocket(): void {
-    this.socket = null
+  private resetConnection(): void {
+    this.isConnected = false
   }
 }
 

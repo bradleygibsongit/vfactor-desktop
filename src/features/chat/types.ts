@@ -130,6 +130,16 @@ export interface RuntimeFileSearchResult {
   type: "file" | "directory";
 }
 
+export type RuntimeReasoningEffort = string;
+
+export interface RuntimeModel {
+  id: string;
+  displayName: string;
+  isDefault: boolean;
+  defaultReasoningEffort?: RuntimeReasoningEffort | null;
+  supportedReasoningEfforts?: RuntimeReasoningEffort[];
+}
+
 export interface RuntimePromptOption {
   id: string;
   label: string;
@@ -224,7 +234,7 @@ export interface HarnessTurnInput {
   agent?: string;
   collaborationMode?: CollaborationModeKind;
   model?: string;
-  reasoningEffort?: "low" | "medium" | "high" | null;
+  reasoningEffort?: RuntimeReasoningEffort | null;
   onUpdate?: (result: HarnessTurnResult) => void;
 }
 
@@ -254,6 +264,7 @@ export interface HarnessAdapter {
   createSession: (projectPath: string) => Promise<RuntimeSession>;
   listAgents: () => Promise<RuntimeAgent[]>;
   listCommands: () => Promise<RuntimeCommand[]>;
+  listModels: () => Promise<RuntimeModel[]>;
   searchFiles: (query: string, directory?: string) => Promise<RuntimeFileSearchResult[]>;
   sendMessage: (input: HarnessTurnInput) => Promise<HarnessTurnResult>;
   answerPrompt: (input: HarnessPromptInput) => Promise<HarnessTurnResult>;

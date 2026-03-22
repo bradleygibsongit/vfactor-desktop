@@ -28,6 +28,7 @@ import {
   DashedLineCircleIcon,
   Delete02Icon,
   Doc01Icon,
+  DocumentValidationIcon,
   Edit02Icon,
   EyeIcon,
   File01Icon,
@@ -150,6 +151,7 @@ export const FileCpp = createIcon("FileCpp", CodeIcon)
 export const FileCss = createIcon("FileCss", CssFile01Icon)
 export const FileCsv = createIcon("FileCsv", Csv01Icon)
 export const FileDoc = createIcon("FileDoc", Doc01Icon)
+export const DocumentValidation = createIcon("DocumentValidation", DocumentValidationIcon)
 export const FileHtml = createIcon("FileHtml", HtmlFile01Icon)
 export const FileImage = createIcon("FileImage", Image01Icon)
 export const FileJpg = createIcon("FileJpg", Jpg01Icon)

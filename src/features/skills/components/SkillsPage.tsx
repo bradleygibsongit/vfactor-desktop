@@ -46,9 +46,6 @@ interface SkillDefinition {
   tags?: string[]
   details?: SkillDetails
   body?: string
-  entryPath?: string
-  directoryPath?: string
-  metadataHint?: string
 }
 
 const RECOMMENDED_SKILLS: SkillDefinition[] = [
@@ -134,9 +131,6 @@ function toInstalledSkillDefinition(skill: ManagedSkill): SkillDefinition {
     enabled: true,
     tags: skill.hasFrontmatter ? ["frontmatter"] : undefined,
     body: skill.body,
-    entryPath: skill.entryPath,
-    directoryPath: skill.directoryPath,
-    metadataHint: "Title and subtitle come from SKILL.md frontmatter.",
   }
 }
 
@@ -194,7 +188,7 @@ function SkillCard({
               </div>
             ) : null}
           </div>
-          <p className="mt-1 truncate text-[13px] leading-5 text-muted-foreground">
+          <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-muted-foreground">
             {skill.description}
           </p>
         </div>
@@ -261,26 +255,12 @@ function SkillDetailsDialog({
                 <DialogTitle className="text-[2rem] leading-none tracking-tight text-card-foreground">
                   {skill.name}
                 </DialogTitle>
-                <DialogDescription className="text-lg text-muted-foreground">
+                <DialogDescription className="max-w-[56ch] line-clamp-2 text-base leading-6 text-muted-foreground">
                   {skill.description}
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
-
-          {skill.entryPath ? (
-            <div className="rounded-xl border border-border bg-muted/35 px-4 py-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/80">
-                Managed Skill File
-              </p>
-              <p className="mt-1 break-all font-mono text-xs leading-6 text-muted-foreground">
-                {skill.entryPath}
-              </p>
-              {skill.metadataHint ? (
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{skill.metadataHint}</p>
-              ) : null}
-            </div>
-          ) : null}
 
           <div className="rounded-xl border border-border bg-background">
             <div className="app-scrollbar-sm max-h-[52vh] overflow-y-auto px-5 py-5">

@@ -162,6 +162,28 @@ export interface CodexTurnStartResponse {
   }
 }
 
+export interface CodexModelReasoningEffort {
+  reasoningEffort: string
+  description?: string | null
+}
+
+export interface CodexModel {
+  id: string
+  model: string
+  displayName?: string | null
+  hidden?: boolean
+  defaultReasoningEffort?: string | null
+  supportedReasoningEfforts?: CodexModelReasoningEffort[] | null
+  inputModalities?: string[]
+  supportsPersonality?: boolean
+  isDefault?: boolean
+}
+
+export interface CodexModelListResponse {
+  data: CodexModel[]
+  nextCursor: string | null
+}
+
 export interface CodexTurnNotification {
   threadId: string
   turn: CodexTurn
@@ -295,7 +317,7 @@ function toMilliseconds(seconds: number): number {
 
 export function mapReasoningEffort(
   effort: HarnessTurnInput["reasoningEffort"]
-): "low" | "medium" | "high" | null {
+): string | null {
   return effort ?? null
 }
 

@@ -98,7 +98,7 @@ export function useChat() {
         agent?: string
         collaborationMode?: CollaborationModeKind
         model?: string
-        reasoningEffort?: "low" | "medium" | "high" | null
+        reasoningEffort?: string | null
       }
     ) => {
       const targetSessionId = sessionIdOverride ?? activeSessionId

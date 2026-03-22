@@ -35,6 +35,7 @@ import {
   TooltipContent,
 } from "@/features/shared/components/ui/tooltip"
 import { QuickStartModal } from "@/features/workspace/components/modals"
+import { ProjectSelectorDropdown } from "@/features/workspace/components/ProjectSelectorDropdown"
 import { useProjectStore } from "@/features/workspace/store"
 import { getAgentAvatarUrl } from "@/features/workspace/utils/avatar"
 import { openFolderPicker } from "@/features/workspace/utils/folderDialog"
@@ -486,15 +487,20 @@ export function LeftSidebar({
           ) : (
             <div className="mb-5 space-y-2">
               {selectedProject ? (
-                <DropdownMenu onOpenChange={setIsProjectSelectorOpen}>
-                  <DropdownMenuTrigger
-                    className={cn(
-                      "group flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-lg)] px-2 py-2 text-left transition-colors",
-                      isProjectSelectorOpen
-                        ? "bg-[var(--sidebar-item-active)] text-sidebar-accent-foreground ring-1 ring-sidebar-border"
-                        : "text-sidebar-foreground/76",
-                    )}
-                  >
+                <ProjectSelectorDropdown
+                  selectedProject={selectedProject}
+                  onOpenChange={setIsProjectSelectorOpen}
+                  side="bottom"
+                  align="start"
+                  trigger={
+                    <div
+                      className={cn(
+                        "group flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-lg)] px-2 py-2 text-left transition-colors",
+                        isProjectSelectorOpen
+                          ? "bg-[var(--sidebar-item-active)] text-sidebar-accent-foreground ring-1 ring-sidebar-border"
+                          : "text-sidebar-foreground/76",
+                      )}
+                    >
                     <img
                       src={getAgentAvatarUrl(selectedProject.avatarSeed)}
                       alt=""
@@ -502,7 +508,7 @@ export function LeftSidebar({
                     />
                     <span className="min-w-0 flex-1">
                       <span
-                        className="font-sans block truncate text-[15px] leading-tight font-bold tracking-normal text-sidebar-foreground transition-colors group-hover:text-foreground"
+                        className="font-sans block truncate text-sm leading-tight font-bold tracking-normal text-sidebar-foreground transition-colors group-hover:text-foreground"
                       >
                         {selectedProject.name}
                       </span>
@@ -511,49 +517,9 @@ export function LeftSidebar({
                       <CaretUp size={10} />
                       <CaretDown size={10} className="-mt-0.5" />
                     </span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    side="bottom"
-                    align="start"
-                    className="w-[260px] rounded-2xl border border-border/70 bg-card p-2 shadow-lg"
-                  >
-                    {projects.map((project) => {
-                      const isActive = project.id === selectedProjectId
-
-                      return (
-                        <DropdownMenuItem
-                          key={project.id}
-                          onClick={() => void handleSelectWorkspace(project)}
-                          className="flex items-center gap-2 px-2 py-2"
-                        >
-                          <img
-                            src={getAgentAvatarUrl(project.avatarSeed)}
-                            alt=""
-                            className="size-6 shrink-0 rounded-[28%] border border-border/60 bg-background/10 object-cover"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span
-                              className="font-sans block truncate text-sm leading-tight font-bold text-sidebar-foreground"
-                            >
-                              {project.name}
-                            </span>
-                          </span>
-                          {isActive ? (
-                            <span className="text-sm text-muted-foreground">Current</span>
-                          ) : null}
-                        </DropdownMenuItem>
-                      )
-                    })}
-                    <DropdownMenuSeparator className="my-2" />
-                    <DropdownMenuItem
-                      onClick={handleOpenProject}
-                      className="min-h-8 rounded-xl px-2 py-1 text-sm font-medium text-foreground"
-                    >
-                      <Plus size={14} className="text-muted-foreground" />
-                      <span>Add new agent</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    </div>
+                  }
+                />
               ) : (
                 <button
                   type="button"

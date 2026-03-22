@@ -40,6 +40,7 @@ import type {
   RuntimeAgent,
   RuntimeCommand,
   RuntimeFileSearchResult,
+  RuntimeModel,
   RuntimePrompt,
   RuntimePromptResponse,
   RuntimePromptState,
@@ -77,6 +78,7 @@ interface ChatState {
   selectHarness: (projectId: string, harnessId: HarnessId) => Promise<void>
   listAgents: (projectId: string) => Promise<RuntimeAgent[]>
   listCommands: (projectId: string) => Promise<RuntimeCommand[]>
+  listModels: (projectId: string) => Promise<RuntimeModel[]>
   searchFiles: (projectId: string, query: string, directory?: string) => Promise<RuntimeFileSearchResult[]>
   onFileChange: (listener: (event: FileChangeEvent) => void) => () => void
   setActivePrompt: (sessionId: string, prompt: RuntimePrompt) => void
@@ -90,7 +92,7 @@ interface ChatState {
       agent?: string
       collaborationMode?: CollaborationModeKind
       model?: string
-      reasoningEffort?: "low" | "medium" | "high" | null
+      reasoningEffort?: string | null
     }
   ) => Promise<void>
   abortSession: (sessionId: string) => Promise<void>
@@ -138,6 +140,20 @@ function schedulePersistState(persist: () => Promise<void>): void {
   }, STREAM_PERSIST_DEBOUNCE_MS)
 }
 
+function normalizeProjectChatState(
+  chatByProject: PersistedChatState["chatByProject"] | undefined
+): PersistedChatState["chatByProject"] {
+  return Object.fromEntries(
+    Object.entries(chatByProject ?? {}).map(([projectId, projectChat]) => [
+      projectId,
+      {
+        ...projectChat,
+        selectedHarnessId: DEFAULT_HARNESS_ID,
+      },
+    ])
+  )
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   chatByProject: {},
   messagesBySession: {},
@@ -160,9 +176,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const store = await getStore()
       const persisted = await store.get<PersistedChatState>("chatState")
+      const normalizedChatByProject = normalizeProjectChatState(persisted?.chatByProject)
 
       set({
-        chatByProject: persisted?.chatByProject ?? {},
+        chatByProject: normalizedChatByProject,
         messagesBySession: persisted?.messagesBySession ?? {},
         // Prompt requests are only resumable while the in-memory harness adapter
         // still tracks the corresponding pending request. After a reload they
@@ -173,7 +190,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       })
 
       const uniqueHarnessIds = new Set<HarnessId>()
-      for (const projectChat of Object.values(persisted?.chatByProject ?? {})) {
+      for (const projectChat of Object.values(normalizedChatByProject)) {
         uniqueHarnessIds.add(projectChat.selectedHarnessId ?? DEFAULT_HARNESS_ID)
         for (const session of projectChat.sessions) {
           uniqueHarnessIds.add(session.harnessId ?? DEFAULT_HARNESS_ID)
@@ -429,6 +446,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const projectChat = get().getProjectChat(projectId)
     const adapter = getHarnessAdapter(projectChat.selectedHarnessId)
     return adapter.listCommands()
+  },
+
+  listModels: async (projectId: string) => {
+    const projectChat = get().getProjectChat(projectId)
+    const adapter = getHarnessAdapter(projectChat.selectedHarnessId)
+    return adapter.listModels()
   },
 
   searchFiles: async (projectId: string, query: string, directory?: string) => {

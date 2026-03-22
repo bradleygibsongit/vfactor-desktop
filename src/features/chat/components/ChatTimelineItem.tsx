@@ -452,7 +452,7 @@ function InlineActivityRow({
   const [isOpen, setIsOpen] = useState(false)
 
   const content = (
-    <div className="group w-full py-0 text-[14px] leading-5 text-muted-foreground">
+    <div className="group w-full py-0 text-sm leading-5 text-muted-foreground">
       {canExpand ? (
         <button
           type="button"

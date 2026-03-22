@@ -13,18 +13,8 @@ import {
 import type { ChildSessionData } from "./agent-activity/AgentActivitySubagent"
 import { CaretDown, CaretRight, Plus } from "@/components/icons"
 import { LoadingDots } from "@/features/shared/components/ui/loading-dots"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/features/shared/components/ui/dropdown-menu"
-import { useProjectStore } from "@/features/workspace/store"
+import { ProjectSelectorDropdown } from "@/features/workspace/components/ProjectSelectorDropdown"
 import { getAgentAvatarUrl } from "@/features/workspace/utils/avatar"
-import { openFolderPicker } from "@/features/workspace/utils/folderDialog"
 import { useStickToBottomContext } from "use-stick-to-bottom"
 import { isRuntimeApprovalPrompt } from "../domain/runtimePrompts"
 import { ChatTimelineItem, InlineSubagentActivity, ToolTimelineRow } from "./ChatTimelineItem"
@@ -76,22 +66,6 @@ interface ChatEmptyStateProps {
 
 function ChatEmptyState({ selectedProject }: ChatEmptyStateProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const { projects, selectProject, addProject } = useProjectStore()
-
-  const handleSelectProject = async (projectId: string) => {
-    await selectProject(projectId)
-    setIsOpen(false)
-  }
-
-  const handleAddProject = async () => {
-    const folderPath = await openFolderPicker()
-    if (!folderPath) {
-      return
-    }
-
-    await addProject(folderPath)
-    setIsOpen(false)
-  }
 
   return (
     <div className="flex w-full items-center justify-center px-4 py-8">
@@ -115,60 +89,24 @@ function ChatEmptyState({ selectedProject }: ChatEmptyStateProps) {
           Let&apos;s get to work
         </h2>
 
-        <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-          <DropdownMenuTrigger className="mt-4 inline-flex max-w-full cursor-pointer items-center gap-1.5 text-left text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground">
-            <span className="max-w-[320px] truncate text-[1.35rem] font-medium leading-none tracking-tight sm:text-[1.6rem]">
-              {selectedProject?.name ?? "Select your agent"}
-            </span>
-            <CaretDown
-              size={16}
-              className={isOpen ? "shrink-0 rotate-180 transition-transform" : "shrink-0 transition-transform"}
-            />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            sideOffset={12}
-            className="w-72 rounded-2xl border border-border/70 bg-card p-2 shadow-lg"
-          >
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="px-2 py-2 text-sm font-medium text-muted-foreground">
-                Select your agent
-              </DropdownMenuLabel>
-              {projects.length > 0 ? (
-                projects.map((project) => {
-                  const isSelected = project.id === selectedProject?.id
-
-                  return (
-                    <DropdownMenuItem
-                      key={project.id}
-                      onClick={() => void handleSelectProject(project.id)}
-                      className="min-h-11 rounded-xl px-3 py-2 text-sm font-medium text-foreground"
-                    >
-                      <img
-                        src={getAgentAvatarUrl(project.avatarSeed)}
-                        alt=""
-                        className="h-7 w-7 rounded-[28%] object-cover"
-                      />
-                      <span className="truncate">{project.name}</span>
-                      {isSelected ? (
-                        <span className="ml-auto text-sm text-foreground">✓</span>
-                      ) : null}
-                    </DropdownMenuItem>
-                  )
-                })
-              ) : (
-                <div className="px-2 py-2 text-sm text-muted-foreground">No agents yet</div>
-              )}
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator className="my-2" />
-            <DropdownMenuItem
-              onClick={() => void handleAddProject()}
-              className="min-h-10 rounded-xl px-3 py-2 text-sm font-medium text-foreground"
-            >
-              <Plus size={14} className="text-muted-foreground" />
-              <span>Add new agent</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ProjectSelectorDropdown
+          selectedProject={selectedProject}
+          open={isOpen}
+          onOpenChange={setIsOpen}
+          sideOffset={12}
+          contentClassName="w-72"
+          trigger={
+            <div className="mt-4 inline-flex max-w-full cursor-pointer items-center gap-1.5 text-left text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground">
+              <span className="max-w-[320px] truncate text-[1.35rem] font-medium leading-none tracking-tight sm:text-[1.6rem]">
+                {selectedProject?.name ?? "Select your agent"}
+              </span>
+              <CaretDown
+                size={16}
+                className={isOpen ? "shrink-0 rotate-180 transition-transform" : "shrink-0 transition-transform"}
+              />
+            </div>
+          }
+        />
       </div>
     </div>
   )
@@ -453,7 +391,7 @@ function TimelineActivityGroup({
   return (
     <MessageComponent from="assistant">
       <MessageContent>
-        <div className="w-full text-[14px] leading-5 text-muted-foreground">
+        <div className="w-full text-sm leading-5 text-muted-foreground">
           {isActive ? (
             <div className="inline-flex max-w-full items-center gap-1.5 text-left">
               <span className="min-w-0">{summary}</span>

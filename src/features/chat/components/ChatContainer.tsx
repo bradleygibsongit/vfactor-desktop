@@ -16,9 +16,6 @@ export function ChatContainer() {
     dismissPrompt,
     abort,
     selectedProject,
-    harnesses,
-    selectedHarnessId,
-    selectHarness,
     activeSessionId,
     createSession,
     createOptimisticSession,
@@ -40,7 +37,7 @@ export function ChatContainer() {
       agent?: string
       collaborationMode?: "default" | "plan"
       model?: string
-      reasoningEffort?: "low" | "medium" | "high" | null
+      reasoningEffort?: string | null
     }
   ) => {
     let sessionId = activeSessionId
@@ -105,9 +102,6 @@ export function ChatContainer() {
             onDismissPrompt={dismissPrompt}
             onAbort={abort}
             onExecuteCommand={handleExecuteCommand}
-            harnesses={harnesses}
-            selectedHarnessId={selectedHarnessId}
-            onSelectHarness={selectHarness}
             status={status}
           />
         </div>
