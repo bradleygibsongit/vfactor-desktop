@@ -21,6 +21,7 @@ import { ChatTimelineItem, InlineSubagentActivity, ToolTimelineRow } from "./Cha
 import { formatElapsedDuration, useElapsedDuration } from "./workDuration"
 import {
   buildTimelineBlocks,
+  getFileChangeEntries,
   getActivityGroupSummary,
   getToolPartFromMessage,
   isActivityGroupActive,
@@ -28,6 +29,7 @@ import {
 } from "./timelineActivity"
 
 interface ChatMessagesProps {
+  threadKey: string
   messages: MessageWithParts[]
   status: "idle" | "streaming" | "error"
   activePrompt?: RuntimePrompt | null
@@ -63,6 +65,28 @@ function StaticConversation({
 
 interface ChatEmptyStateProps {
   selectedProject?: Project | null
+}
+
+function countDiffLines(diff: string | undefined): { added: number; removed: number } {
+  if (!diff) {
+    return { added: 0, removed: 0 }
+  }
+
+  return diff.split("\n").reduce(
+    (totals, line) => {
+      if (line.startsWith("+++ ") || line.startsWith("--- ")) {
+        return totals
+      }
+      if (line.startsWith("+")) {
+        return { ...totals, added: totals.added + 1 }
+      }
+      if (line.startsWith("-")) {
+        return { ...totals, removed: totals.removed + 1 }
+      }
+      return totals
+    },
+    { added: 0, removed: 0 }
+  )
 }
 
 function ChatEmptyState({ selectedProject }: ChatEmptyStateProps) {
@@ -114,6 +138,7 @@ function ChatEmptyState({ selectedProject }: ChatEmptyStateProps) {
 }
 
 export function ChatMessages({
+  threadKey,
   messages,
   status,
   activePrompt = null,
@@ -201,6 +226,124 @@ export function ChatMessages({
     durationMs: number
   } | null>(null)
   const previousStatusRef = useRef(status)
+  const lastAssistantTextMessageId = useMemo(
+    () =>
+      [...renderedMessages]
+        .reverse()
+        .find(
+          (message) =>
+            message.info.role === "assistant" &&
+            message.parts.some((part) => part.type === "text" && part.text.trim())
+        )?.info.id ?? null,
+    [renderedMessages]
+  )
+  const changedFilesSummaryByMessageId = useMemo(() => {
+    const summaryByMessageId = new Map<
+      string,
+      { fileCount: number; label: string; added: number; removed: number }
+    >()
+
+    for (const message of renderedMessages) {
+      if (message.info.role !== "assistant") {
+        continue
+      }
+
+      const hasText = message.parts.some((part) => part.type === "text" && part.text.trim())
+      if (!hasText || !message.info.turnId) {
+        continue
+      }
+
+      const changeTotals = new Map<string, { added: number; removed: number }>()
+
+      for (const candidate of renderedMessages) {
+        if (candidate.info.turnId !== message.info.turnId || candidate.info.itemType !== "fileChange") {
+          continue
+        }
+
+        const toolPart = getToolPartFromMessage(candidate)
+        const output = toolPart?.state.output
+        const source =
+          output && typeof output === "object" && "changes" in output
+            ? (output as { changes?: unknown[] }).changes
+            : undefined
+        const fileChanges = getFileChangeEntries(source)
+
+        for (const change of fileChanges) {
+          const current = changeTotals.get(change.path) ?? { added: 0, removed: 0 }
+          const diffTotals = countDiffLines(change.diff)
+
+          changeTotals.set(change.path, {
+            added: current.added + diffTotals.added,
+            removed: current.removed + diffTotals.removed,
+          })
+        }
+      }
+
+      if (changeTotals.size === 0) {
+        continue
+      }
+
+      const entries = Array.from(changeTotals.entries())
+      const [firstPath] = entries[0]
+      const totalAdded = entries.reduce((sum, [, totals]) => sum + totals.added, 0)
+      const totalRemoved = entries.reduce((sum, [, totals]) => sum + totals.removed, 0)
+
+      summaryByMessageId.set(message.info.id, {
+        fileCount: entries.length,
+        label:
+          entries.length === 1
+            ? firstPath.split(/[\\/]/).filter(Boolean).at(-1) ?? firstPath
+            : `${entries.length} files`,
+        added: totalAdded,
+        removed: totalRemoved,
+      })
+    }
+
+    return summaryByMessageId
+  }, [renderedMessages])
+  const completedWorkDurationByMessageId = useMemo(() => {
+    const earliestTimestampByTurnId = new Map<string, number>()
+    const durationByMessageId = new Map<string, number>()
+
+    for (const message of renderedMessages) {
+      const turnId = message.info.turnId
+      if (!turnId) {
+        continue
+      }
+
+      const existingTimestamp = earliestTimestampByTurnId.get(turnId)
+      const nextTimestamp =
+        existingTimestamp == null
+          ? message.info.createdAt
+          : Math.min(existingTimestamp, message.info.createdAt)
+      earliestTimestampByTurnId.set(turnId, nextTimestamp)
+    }
+
+    for (const message of renderedMessages) {
+      if (message.info.role !== "assistant") {
+        continue
+      }
+
+      const hasText = message.parts.some((part) => part.type === "text" && part.text.trim())
+      if (!hasText) {
+        continue
+      }
+
+      const turnId = message.info.turnId
+      if (!turnId) {
+        continue
+      }
+
+      const startTime = earliestTimestampByTurnId.get(turnId)
+      if (startTime == null) {
+        continue
+      }
+
+      durationByMessageId.set(message.info.id, Math.max(0, message.info.createdAt - startTime))
+    }
+
+    return durationByMessageId
+  }, [renderedMessages])
 
   useEffect(() => {
     const activeGroupKeys = activityGroups
@@ -312,6 +455,8 @@ export function ChatMessages({
 
     return Array.from(childSessionData.values())
   }, [childSessionData, hasCollabTimelineItem])
+  const [preparedThreadKey, setPreparedThreadKey] = useState(threadKey)
+  const isThreadPrepared = preparedThreadKey === threadKey
 
   if (!hasContent) {
     if (!showInlineIntro) {
@@ -332,8 +477,16 @@ export function ChatMessages({
   }
 
   return (
-    <Conversation className="h-full">
-      <ChatAutoScroll messages={messages} status={status} />
+    <Conversation
+      key={threadKey}
+      className={isThreadPrepared ? "h-full" : "h-full invisible"}
+    >
+      <ChatAutoScroll
+        threadKey={threadKey}
+        messages={messages}
+        status={status}
+        onThreadPrepared={setPreparedThreadKey}
+      />
       <ConversationContent className="mx-auto w-full max-w-[803px] px-10 pb-10">
         <>
           {showInlineIntro ? <ChatEmptyState selectedProject={_selectedProject} /> : null}
@@ -343,6 +496,8 @@ export function ChatMessages({
                 key={block.key}
                 message={block.message}
                 isStreaming={status === "streaming" && block.message.info.id === lastMessage?.info.id}
+                showCopyAction={block.message.info.id === lastAssistantTextMessageId}
+                changedFilesSummary={changedFilesSummaryByMessageId.get(block.message.info.id)}
                 childSessions={childSessionData}
                 workStartTime={
                   status === "streaming" && block.message.info.id === lastMessage?.info.id
@@ -352,7 +507,7 @@ export function ChatMessages({
                 completedWorkDurationMs={
                   block.message.info.id === lastCompletedWork?.messageId
                     ? lastCompletedWork.durationMs
-                    : undefined
+                    : completedWorkDurationByMessageId.get(block.message.info.id)
                 }
               />
             ) : (
@@ -389,18 +544,31 @@ export function ChatMessages({
 }
 
 function ChatAutoScroll({
+  threadKey,
   messages,
   status,
+  onThreadPrepared,
 }: {
+  threadKey: string
   messages: MessageWithParts[]
   status: "idle" | "streaming" | "error"
+  onThreadPrepared: (threadKey: string) => void
 }) {
-  const { scrollToBottom } = useStickToBottomContext()
+  const { scrollToBottom, state } = useStickToBottomContext()
   const previousLastMessageIdRef = useRef<string | null>(null)
   const previousStatusRef = useRef<typeof status>(status)
 
   const lastMessage = messages[messages.length - 1] ?? null
   const lastMessageId = lastMessage?.info.id ?? null
+
+  useLayoutEffect(() => {
+    const targetScrollTop = state.calculatedTargetScrollTop
+    state.scrollTop = targetScrollTop
+    state.lastScrollTop = targetScrollTop
+    previousLastMessageIdRef.current = lastMessageId
+    previousStatusRef.current = status
+    onThreadPrepared(threadKey)
+  }, [lastMessageId, onThreadPrepared, state, status, threadKey])
 
   useEffect(() => {
     const previousLastMessageId = previousLastMessageIdRef.current
@@ -500,7 +668,7 @@ function StreamingAssistantPlaceholder({
       <MessageContent>
         <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
           <LoadingDots />
-          <span>{elapsed ?? formatElapsedDuration(0)}</span>
+          <span className="tabular-nums">{elapsed ?? formatElapsedDuration(0)}</span>
         </div>
       </MessageContent>
     </MessageComponent>

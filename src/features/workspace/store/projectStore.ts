@@ -162,10 +162,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   selectProject: async (id: string) => {
     set({ selectedProjectId: id })
-    // Persist the selection
-    const store = await getStore()
-    await store.set(SELECTED_PROJECT_KEY, id)
-    await store.save()
+
+    void (async () => {
+      try {
+        const store = await getStore()
+        await store.set(SELECTED_PROJECT_KEY, id)
+        await store.save()
+      } catch (error) {
+        console.error("Failed to persist selected project:", error)
+      }
+    })()
   },
 
   updateProjectBackground: async (id: string, backgroundImageUrl: string) => {

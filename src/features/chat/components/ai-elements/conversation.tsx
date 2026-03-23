@@ -15,8 +15,8 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
       "app-scrollbar relative flex-1 overflow-y-hidden overscroll-none",
       className
     )}
-    initial="smooth"
-    resize="smooth"
+    initial="instant"
+    resize="instant"
     role="log"
     {...props}
   />
@@ -31,7 +31,7 @@ export const ConversationContent = ({
   ...props
 }: ConversationContentProps) => (
   <StickToBottom.Content
-    className={cn("flex flex-col gap-6 p-4", className)}
+    className={cn("flex min-h-full flex-col justify-end gap-6 p-4", className)}
     {...props}
   />
 );

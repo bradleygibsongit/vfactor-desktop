@@ -1,8 +1,12 @@
-import { useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   CaretDown,
   CaretRight,
+  CheckCircle,
+  Copy,
+  File,
 } from "@/components/icons"
+import { getFileIcon } from "@/features/editor/utils/fileIcons"
 import { cn } from "@/lib/utils"
 import type { MessageWithParts, RuntimeMessagePart, RuntimeToolPart } from "../types"
 import {
@@ -21,6 +25,13 @@ interface ChatTimelineItemProps {
   childSessions?: Map<string, ChildSessionData>
   workStartTime?: number
   completedWorkDurationMs?: number
+  showCopyAction?: boolean
+  changedFilesSummary?: {
+    fileCount: number
+    label: string
+    added: number
+    removed: number
+  }
 }
 
 function getMessageText(parts: RuntimeMessagePart[]): string {
@@ -36,13 +47,76 @@ function TimelineTextBlock({
   isStreaming,
   tone = "default",
   workLabel,
+  changedFilesSummary,
+  onCopy,
 }: {
   eyebrow?: string
   text: string
   isStreaming: boolean
   tone?: "default" | "muted" | "accent"
   workLabel?: string
+  changedFilesSummary?: {
+    fileCount: number
+    label: string
+    added: number
+    removed: number
+  }
+  onCopy?: () => Promise<void> | void
 }) {
+  const [isCopied, setIsCopied] = useState(false)
+
+  useEffect(() => {
+    if (!isCopied) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => setIsCopied(false), 1800)
+    return () => window.clearTimeout(timeoutId)
+  }, [isCopied])
+
+  const handleCopy = async () => {
+    if (!onCopy) {
+      return
+    }
+
+    await onCopy()
+    setIsCopied(true)
+  }
+
+  const footer = workLabel || changedFilesSummary || onCopy ? (
+    <div className="mt-2 flex items-center gap-1.5 text-xs tracking-[0.01em] text-muted-foreground/80 tabular-nums">
+      {workLabel ? <span>{workLabel}</span> : null}
+      {workLabel && onCopy ? (
+        <span aria-hidden="true" className="text-muted-foreground/45">
+          ·
+        </span>
+      ) : null}
+      {onCopy ? (
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground/88 transition-colors hover:bg-muted/55 hover:text-foreground"
+          aria-label="Copy message"
+        >
+          {isCopied ? <CheckCircle size={14} /> : <Copy size={15} />}
+        </button>
+      ) : null}
+      {onCopy && changedFilesSummary ? (
+        <span aria-hidden="true" className="text-muted-foreground/45">
+          ·
+        </span>
+      ) : null}
+      {changedFilesSummary ? (
+        <ChangedFilesAggregateChip
+          fileCount={changedFilesSummary.fileCount}
+          label={changedFilesSummary.label}
+          added={changedFilesSummary.added}
+          removed={changedFilesSummary.removed}
+        />
+      ) : null}
+    </div>
+  ) : null
+
   if (tone === "default") {
     return (
       <MessageComponent from="assistant">
@@ -53,11 +127,7 @@ function TimelineTextBlock({
           >
             {text}
           </MessageResponse>
-          {workLabel ? (
-            <div className="text-xs tracking-[0.01em] text-muted-foreground/80">
-              {workLabel}
-            </div>
-          ) : null}
+          {footer}
         </MessageContent>
       </MessageComponent>
     )
@@ -81,11 +151,7 @@ function TimelineTextBlock({
           >
             {text}
           </MessageResponse>
-          {workLabel ? (
-            <div className="mt-2 text-xs tracking-[0.01em] text-muted-foreground/80">
-              {workLabel}
-            </div>
-          ) : null}
+          {footer}
         </div>
       </MessageContent>
     </MessageComponent>
@@ -110,7 +176,7 @@ function useAssistantWorkLabel({
   }
 
   if (completedDurationMs != null) {
-    return `Worked for ${formatElapsedDuration(completedDurationMs)}`
+    return formatElapsedDuration(completedDurationMs)
   }
 
   return null
@@ -164,6 +230,65 @@ function renderInlineCode(value: string) {
 
 function renderInlinePath(value: string) {
   return <span className="font-mono text-[var(--color-chat-file-accent)]">{value}</span>
+}
+
+function ChangedFileChip({
+  path,
+  added,
+  removed,
+}: {
+  path: string
+  added: number
+  removed: number
+}) {
+  const filename = getBaseName(path)
+  const FileIcon = getFileIcon(filename)
+
+  return (
+    <button
+      type="button"
+      onClick={() => {}}
+      className="inline-flex items-center gap-3 rounded-xl border border-border/80 bg-card px-3 py-2 text-sm text-foreground shadow-sm transition-colors hover:border-border hover:bg-card/95"
+      aria-label={`Open changes for ${filename}`}
+    >
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-muted/65 text-[var(--color-chat-file-accent)]">
+        <FileIcon size={16} />
+      </span>
+      <span className="truncate font-medium text-foreground/88">{filename}</span>
+      <span className="inline-flex items-center gap-2 tabular-nums">
+        {added > 0 ? <span className="font-medium text-emerald-500">+{added}</span> : null}
+        {removed > 0 ? <span className="font-medium text-red-500">-{removed}</span> : null}
+      </span>
+    </button>
+  )
+}
+
+function ChangedFilesAggregateChip({
+  fileCount,
+  label,
+  added,
+  removed,
+}: {
+  fileCount: number
+  label: string
+  added: number
+  removed: number
+}) {
+  const FileIcon = fileCount === 1 ? getFileIcon(label) : File
+
+  return (
+    <button
+      type="button"
+      onClick={() => {}}
+      className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-border/70 bg-card/90 px-1.5 py-1 text-[12px] leading-none text-foreground/88 shadow-sm transition-colors hover:border-border hover:bg-card"
+      aria-label={`Open changes for ${label}`}
+    >
+      <FileIcon size={12} className="shrink-0 text-[var(--color-chat-file-accent)]" />
+      <span className="truncate font-medium text-muted-foreground/88">{label}</span>
+      {added > 0 ? <span className="shrink-0 font-medium text-emerald-500">+{added}</span> : null}
+      {removed > 0 ? <span className="shrink-0 font-medium text-red-500">-{removed}</span> : null}
+    </button>
+  )
 }
 
 function prettyValue(value: unknown): string {
@@ -263,44 +388,13 @@ function renderFileChangeSummary(toolPart: RuntimeToolPart) {
     if (fileChanges.length === 0) {
       return <span>Waiting for approval to apply workspace edits</span>
     }
-
-    const primaryPath = getBaseName(fileChanges[0]?.path ?? "file")
-    const pendingLabel =
-      fileChanges.length === 1
-        ? "Waiting for approval to edit"
-        : `Waiting for approval to edit ${fileChanges.length} files including`
-    return (
-      <span className="inline-flex flex-wrap items-center gap-2">
-        <span>{pendingLabel}</span>
-        <span>{renderInlinePath(primaryPath)}</span>
-      </span>
-    )
   }
 
   if (fileChanges.length === 0) {
     return <span>Prepared workspace edits</span>
   }
 
-  const totals = fileChanges.reduce(
-    (result, change) => {
-      const stats = countDiffLines(change.diff)
-      return {
-        added: result.added + stats.added,
-        removed: result.removed + stats.removed,
-      }
-    },
-    { added: 0, removed: 0 }
-  )
-  const primaryPath = getBaseName(fileChanges[0]?.path ?? "file")
-
-  return (
-    <span className="inline-flex flex-wrap items-center gap-2">
-      <span>{fileChanges.length === 1 ? "Edited" : `Edited ${fileChanges.length} files including`}</span>
-      {renderInlinePath(primaryPath)}
-      {totals.added > 0 ? <span className="text-emerald-500">+{totals.added}</span> : null}
-      {totals.removed > 0 ? <span className="text-red-500">-{totals.removed}</span> : null}
-    </span>
-  )
+  return <span>{fileChanges.length === 1 ? "Updated 1 file" : `Updated ${fileChanges.length} files`}</span>
 }
 
 function renderGenericToolSummary(message: MessageWithParts, toolPart: RuntimeToolPart) {
@@ -560,7 +654,6 @@ export function ToolTimelineRow({
     return (
       <InlineActivityRow
         summary={renderFileChangeSummary(toolPart)}
-        details={details}
         withinGroup={withinGroup}
       />
     )
@@ -593,6 +686,8 @@ export function ChatTimelineItem({
   childSessions,
   workStartTime,
   completedWorkDurationMs,
+  showCopyAction = false,
+  changedFilesSummary,
 }: ChatTimelineItemProps) {
   const text = getMessageText(message.parts)
   const toolPart = getToolPart(message.parts)
@@ -601,6 +696,14 @@ export function ChatTimelineItem({
     isActive: isStreaming,
     completedDurationMs: completedWorkDurationMs,
   })
+  const canCopyMessage = showCopyAction && !isStreaming && !!text.trim()
+  const handleCopyMessage = async () => {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return
+    }
+
+    await navigator.clipboard.writeText(text)
+  }
 
   if (message.info.role === "user") {
     if (!text.trim()) {
@@ -628,7 +731,15 @@ export function ChatTimelineItem({
   const phase = message.info.phase
 
   if (itemType === "reasoning") {
-    return <TimelineTextBlock text={text} isStreaming={isStreaming} workLabel={workLabel ?? undefined} />
+    return (
+      <TimelineTextBlock
+        text={text}
+        isStreaming={isStreaming}
+        workLabel={workLabel ?? undefined}
+        changedFilesSummary={changedFilesSummary}
+        onCopy={canCopyMessage ? handleCopyMessage : undefined}
+      />
+    )
   }
 
   if (itemType === "plan") {
@@ -639,6 +750,8 @@ export function ChatTimelineItem({
         isStreaming={isStreaming}
         tone="accent"
         workLabel={workLabel ?? undefined}
+        changedFilesSummary={changedFilesSummary}
+        onCopy={canCopyMessage ? handleCopyMessage : undefined}
       />
     )
   }
@@ -651,6 +764,8 @@ export function ChatTimelineItem({
         isStreaming={isStreaming}
         tone="accent"
         workLabel={workLabel ?? undefined}
+        changedFilesSummary={changedFilesSummary}
+        onCopy={canCopyMessage ? handleCopyMessage : undefined}
       />
     )
   }
@@ -663,13 +778,31 @@ export function ChatTimelineItem({
         isStreaming={isStreaming}
         tone="muted"
         workLabel={workLabel ?? undefined}
+        changedFilesSummary={changedFilesSummary}
+        onCopy={canCopyMessage ? handleCopyMessage : undefined}
       />
     )
   }
 
   if (phase === "commentary") {
-    return <TimelineTextBlock text={text} isStreaming={isStreaming} workLabel={workLabel ?? undefined} />
+    return (
+      <TimelineTextBlock
+        text={text}
+        isStreaming={isStreaming}
+        workLabel={workLabel ?? undefined}
+        changedFilesSummary={changedFilesSummary}
+        onCopy={canCopyMessage ? handleCopyMessage : undefined}
+      />
+    )
   }
 
-  return <TimelineTextBlock text={text} isStreaming={isStreaming} workLabel={workLabel ?? undefined} />
+  return (
+    <TimelineTextBlock
+      text={text}
+      isStreaming={isStreaming}
+      workLabel={workLabel ?? undefined}
+      changedFilesSummary={changedFilesSummary}
+      onCopy={canCopyMessage ? handleCopyMessage : undefined}
+    />
+  )
 }

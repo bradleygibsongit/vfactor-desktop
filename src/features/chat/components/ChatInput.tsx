@@ -1,5 +1,14 @@
 import { ArrowUp02, Brain, CaretDown, CheckCircle, Circle, DocumentValidation, Stop } from "@/components/icons"
-import { useState, useRef, useCallback, useMemo, useEffect, type KeyboardEvent as ReactKeyboardEvent, type FormEvent } from "react"
+import {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type FormEvent,
+} from "react"
 import { SlashCommandMenu } from "./SlashCommandMenu"
 import { AtMentionMenu, type FileItem } from "./AtMentionMenu"
 import { useCommands, type NormalizedCommand } from "../hooks/useCommands"
@@ -23,7 +32,10 @@ import { StructuredPromptSurface } from "./composer/StructuredPromptSurface"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/features/shared/components/ui/dropdown-menu"
 import {
@@ -43,6 +55,15 @@ import {
 } from "lexical"
 import { $createSkillChipNode, $isSkillChipNode, SkillChipNode } from "./SkillChipNode"
 import { cn } from "@/lib/utils"
+import { useProjectStore } from "@/features/workspace/store"
+import { useChatStore } from "../store"
+import {
+  formatShortcutBinding,
+  getShortcutBinding,
+  matchesShortcutBinding,
+} from "@/features/settings/shortcuts"
+import openAiSymbolLightUrl from "@/assets/brands/openai-symbol-light.svg"
+import openAiSymbolDarkUrl from "@/assets/brands/openai-symbol-dark.svg"
 
 interface ChatInputProps {
   input: string
@@ -65,6 +86,129 @@ interface ChatInputProps {
   onDismissPrompt?: () => void
 }
 
+type ModelLogoKind = "openai" | "claude" | "codex" | "default"
+
+function OpenAILogo({
+  className,
+}: {
+  className?: string
+}) {
+  return (
+    <span className={cn("relative inline-flex shrink-0", className)} aria-hidden="true">
+      <img src={openAiSymbolLightUrl} alt="" className="size-full object-contain dark:hidden" />
+      <img src={openAiSymbolDarkUrl} alt="" className="hidden size-full object-contain dark:block" />
+    </span>
+  )
+}
+
+function ClaudeLogo({
+  className,
+}: {
+  className?: string
+}) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M12 3.5 13.9 8.1 18.5 10 13.9 11.9 12 16.5 10.1 11.9 5.5 10 10.1 8.1 12 3.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <circle cx="12" cy="10" r="1.35" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CodexLogo({
+  className,
+}: {
+  className?: string
+}) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect x="4.5" y="4.5" width="15" height="15" rx="4" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M10.2 9.1 7.7 12 10.2 14.9M13.8 9.1 16.3 12 13.8 14.9"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  )
+}
+
+function ModelLogo({
+  kind,
+  className,
+}: {
+  kind: ModelLogoKind
+  className?: string
+}) {
+  if (kind === "openai") {
+    return <OpenAILogo className={className} />
+  }
+
+  if (kind === "claude") {
+    return <ClaudeLogo className={className} />
+  }
+
+  if (kind === "codex") {
+    return <CodexLogo className={className} />
+  }
+
+  return <Circle className={className} />
+}
+
+function getModelLogoKind(value: string, selectedHarnessId: "codex" | "claude-code" | null): ModelLogoKind {
+  const normalized = value.toLowerCase()
+
+  if (normalized.includes("claude")) {
+    return "claude"
+  }
+
+  if (
+    normalized.includes("gpt") ||
+    normalized.includes("openai") ||
+    normalized.includes("codex") ||
+    /^o\d/.test(normalized) ||
+    /^o[1-9]-/.test(normalized)
+  ) {
+    return "openai"
+  }
+
+  if (selectedHarnessId === "claude-code") {
+    return "claude"
+  }
+
+  if (selectedHarnessId === "codex") {
+    return "codex"
+  }
+
+  return "default"
+}
+
+function getHarnessGroupMeta(selectedHarnessId: "codex" | "claude-code" | null): {
+  key: string
+  label: string
+  logoKind: ModelLogoKind
+} {
+  if (selectedHarnessId === "claude-code") {
+    return {
+      key: "claude",
+      label: "Claude",
+      logoKind: "claude",
+    }
+  }
+
+  return {
+    key: "codex",
+    label: "Codex",
+    logoKind: "codex",
+  }
+}
+
 function formatReasoningEffortLabel(value: string): string {
   return value
     .split(/[-_\s]+/)
@@ -85,6 +229,8 @@ export function ChatInput({
   onAnswerPrompt,
   onDismissPrompt,
 }: ChatInputProps) {
+  const { selectedProjectId } = useProjectStore()
+  const getProjectChat = useChatStore((state) => state.getProjectChat)
   const [isImeComposing, setIsImeComposing] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [dismissedMenuKey, setDismissedMenuKey] = useState<string | null>(null)
@@ -97,17 +243,54 @@ export function ChatInput({
   const { models: availableModels, isLoading: isLoadingModels } = useModels()
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const [reasoningEffort, setReasoningEffort] = useState<RuntimeReasoningEffort | null>(null)
+  const planModeShortcut = useMemo(() => getShortcutBinding("toggle-plan-mode"), [])
+  const planModeShortcutLabel = useMemo(
+    () => formatShortcutBinding(planModeShortcut),
+    [planModeShortcut]
+  )
   const editorRef = useRef<LexicalEditor | null>(null)
   const serializedComposerValueRef = useRef(input)
   const previousCommandSignatureRef = useRef("")
+  const skipNextPlanToggleClickRef = useRef(false)
+
+  const togglePlanMode = useCallback(() => {
+    setIsPlanModeEnabled((current) => !current)
+  }, [])
 
   const { commands, isLoading: isLoadingCommands } = useCommands()
   const { agents, isLoading: isLoadingAgents } = useAgents()
   const { results: fileResults, isLoading: isLoadingFiles, search: searchFiles, clear: clearFiles } = useFileSearch()
+  const selectedHarnessId = selectedProjectId ? getProjectChat(selectedProjectId).selectedHarnessId : null
   const selectedModel = useMemo(
     () => availableModels.find((model) => model.id === selectedModelId) ?? null,
     [availableModels, selectedModelId]
   )
+  const selectedModelLogoKind = useMemo(
+    () =>
+      selectedModel
+        ? getModelLogoKind(
+            `${selectedModel.displayName ?? ""} ${selectedModel.id ?? ""}`,
+            selectedHarnessId
+          )
+        : (selectedHarnessId === "claude-code" ? "claude" : selectedHarnessId === "codex" ? "codex" : "default"),
+    [selectedHarnessId, selectedModel]
+  )
+  const modelGroups = useMemo(() => {
+    const harnessGroup = getHarnessGroupMeta(selectedHarnessId)
+
+    return [
+      {
+        ...harnessGroup,
+        models: availableModels.map((model) => ({
+          model,
+          logoKind: getModelLogoKind(
+            `${model.displayName ?? ""} ${model.id ?? ""}`,
+            selectedHarnessId
+          ),
+        })),
+      },
+    ]
+  }, [availableModels, selectedHarnessId])
   const availableReasoningEfforts = useMemo(() => {
     const supported = selectedModel?.supportedReasoningEfforts?.filter((effort) => effort.trim().length > 0) ?? []
     const defaultEffort = selectedModel?.defaultReasoningEffort?.trim() ?? null
@@ -220,6 +403,24 @@ export function ChatInput({
       setIsPlanModeEnabled(false)
     }
   }, [isPlanModeAvailable])
+
+  useEffect(() => {
+    if (!isPlanModeAvailable || isPromptActive) {
+      return
+    }
+
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || !matchesShortcutBinding(event, planModeShortcut)) {
+        return
+      }
+
+      event.preventDefault()
+      togglePlanMode()
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown)
+    return () => window.removeEventListener("keydown", handleWindowKeyDown)
+  }, [isPlanModeAvailable, isPromptActive, planModeShortcut, togglePlanMode])
 
   useEffect(() => {
     if (isPromptActive) {
@@ -618,7 +819,25 @@ export function ChatInput({
 
   const selectorsRow = !isPromptActive
   const promptCtaLabel = isLastPromptQuestion ? "Submit" : "Continue"
-  
+
+  const handlePlanModeMouseDown = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) {
+      return
+    }
+
+    event.preventDefault()
+    skipNextPlanToggleClickRef.current = true
+    togglePlanMode()
+  }, [togglePlanMode])
+
+  const handlePlanModeClick = useCallback(() => {
+    if (skipNextPlanToggleClickRef.current) {
+      skipNextPlanToggleClickRef.current = false
+      return
+    }
+
+    togglePlanMode()
+  }, [togglePlanMode])
 
   const handleSubmit = useCallback(
     (e?: FormEvent) => {
@@ -911,9 +1130,11 @@ export function ChatInput({
     <form onSubmit={handleSubmit} className="bg-main-content px-10 pb-3">
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl border bg-card shadow-sm transition-colors",
+          "relative overflow-hidden rounded-2xl border bg-card shadow-sm",
           isApprovalComposerState
             ? "border-[var(--color-chat-approval-border)] bg-[var(--color-chat-approval-surface)]"
+            : isPlanModeEnabled
+              ? "border-[var(--color-chat-plan-border)] bg-[var(--color-chat-plan-surface)] shadow-[0_0_0_1px_var(--color-chat-plan-border)]"
             : "border-border"
         )}
       >
@@ -923,6 +1144,8 @@ export function ChatInput({
               "relative border-b",
               isApprovalComposerState
                 ? "border-[var(--color-chat-approval-border)]"
+                : isPlanModeEnabled
+                  ? "border-[var(--color-chat-plan-border)]"
                 : "border-border"
             )}
           >
@@ -1051,20 +1274,34 @@ export function ChatInput({
             <div className="mt-4 flex items-center gap-2">
               {selectorsRow && <DropdownMenu>
               <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 px-1 text-sm text-muted-foreground transition-colors hover:text-foreground cursor-pointer">
+                <ModelLogo kind={selectedModelLogoKind} className="size-[18px] shrink-0" />
                 <span>{selectedModelLabel}</span>
                 <CaretDown className="size-3 text-muted-foreground" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuContent align="start" className="w-64">
                 {availableModels.length > 0 ? (
-                  availableModels.map((model) => (
-                    <DropdownMenuItem
-                      key={model.id}
-                      onClick={() => setSelectedModelId(model.id)}
-                      className="flex items-center justify-between gap-3"
-                    >
-                      <span>{getRuntimeModelLabel(model)}</span>
-                      {model.id === selectedModelId && <CheckCircle className="size-3.5 text-muted-foreground" />}
-                    </DropdownMenuItem>
+                  modelGroups.map((group, groupIndex) => (
+                    <div key={group.key}>
+                      {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="px-2 py-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground/78">
+                          <span>{group.label}</span>
+                        </DropdownMenuLabel>
+                        {group.models.map(({ model, logoKind }) => (
+                          <DropdownMenuItem
+                            key={model.id}
+                          onClick={() => setSelectedModelId(model.id)}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <ModelLogo kind={logoKind} className="size-5 shrink-0 text-muted-foreground/82" />
+                            <span className="truncate">{getRuntimeModelLabel(model)}</span>
+                          </span>
+                            {model.id === selectedModelId && <CheckCircle className="size-3.5 text-muted-foreground" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    </div>
                   ))
                 ) : (
                   <DropdownMenuItem disabled>
@@ -1104,19 +1341,25 @@ export function ChatInput({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={() => setIsPlanModeEnabled((current) => !current)}
+                    onMouseDown={handlePlanModeMouseDown}
+                    onClick={handlePlanModeClick}
                     aria-label="Toggle plan mode"
                     className={cn(
-                      "inline-flex h-8 w-8 items-center justify-center rounded-full",
+                      "inline-flex h-8 w-8 items-center justify-center rounded-full border",
                       isPlanModeEnabled
-                        ? "text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
+                        ? "border-transparent bg-transparent text-[var(--color-chat-plan-accent)]"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <DocumentValidation className="size-4" />
+                    <DocumentValidation
+                      className={cn(
+                        "size-4",
+                        isPlanModeEnabled ? "text-[var(--color-chat-plan-accent)]" : undefined
+                      )}
+                    />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top">Plan mode</TooltipContent>
+                <TooltipContent side="top">{`Plan mode (${planModeShortcutLabel})`}</TooltipContent>
               </Tooltip>
               )}
 

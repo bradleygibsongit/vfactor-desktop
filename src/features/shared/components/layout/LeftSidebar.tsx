@@ -1,32 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import {
   CaretDown,
-  CaretUp,
-  Clock,
-  FolderSimple,
+  CaretRight,
   FolderSimplePlus,
   GearSix,
-  PencilSimple,
-  PlusSquare,
-  X,
-  Plus,
   Archive,
 } from "@/components/icons"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/features/shared/components/ui/alert-dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/features/shared/components/ui/dropdown-menu"
 import {
@@ -35,7 +18,6 @@ import {
   TooltipContent,
 } from "@/features/shared/components/ui/tooltip"
 import { QuickStartModal } from "@/features/workspace/components/modals"
-import { ProjectSelectorDropdown } from "@/features/workspace/components/ProjectSelectorDropdown"
 import { useProjectStore } from "@/features/workspace/store"
 import { getAgentAvatarUrl } from "@/features/workspace/utils/avatar"
 import { openFolderPicker } from "@/features/workspace/utils/folderDialog"
@@ -68,8 +50,9 @@ export function LeftSidebar({
   onSelectSettingsSection,
 }: LeftSidebarProps) {
   const [quickStartOpen, setQuickStartOpen] = useState(false)
-  const [projectToRemove, setProjectToRemove] = useState<{ id: string; name: string } | null>(null)
   const [confirmArchiveSessionId, setConfirmArchiveSessionId] = useState<string | null>(null)
+  const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
+  const pendingSessionSelectionRef = useRef<{ projectId: string; sessionId: string } | null>(null)
   const { isCollapsed, width, setWidth } = useSidebar()
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const {
@@ -78,7 +61,6 @@ export function LeftSidebar({
     isLoading,
     loadProjects,
     addProject,
-    removeProject,
     selectProject,
   } = useProjectStore()
 
@@ -112,7 +94,12 @@ export function LeftSidebar({
     }
 
     const projectChat = getProjectChat(selectedProjectId)
+    const pendingSessionSelection = pendingSessionSelectionRef.current
     void loadSessionsForProject(selectedProjectId, project.path)
+
+    if (pendingSessionSelection?.projectId === selectedProjectId) {
+      return
+    }
 
     if (projectChat.activeSessionId && currentSessionId !== projectChat.activeSessionId) {
       void selectSession(selectedProjectId, projectChat.activeSessionId)
@@ -126,6 +113,19 @@ export function LeftSidebar({
     selectedProjectId,
   ])
 
+  useEffect(() => {
+    setExpandedProjectIds((currentIds) => {
+      const validProjectIds = new Set(projects.map((project) => project.id))
+      const nextIds = currentIds.filter((projectId) => validProjectIds.has(projectId))
+
+      const hasChanged =
+        nextIds.length !== currentIds.length ||
+        nextIds.some((projectId, index) => projectId !== currentIds[index])
+
+      return hasChanged ? nextIds : currentIds
+    })
+  }, [projects])
+
   const handleOpenProject = async () => {
     const folderPath = await openFolderPicker()
     if (folderPath) {
@@ -133,25 +133,22 @@ export function LeftSidebar({
     }
   }
 
-  const handleRemoveClick = (e: React.MouseEvent, project: { id: string; name: string }) => {
-    e.stopPropagation()
-    setProjectToRemove(project)
-  }
-
-  const handleConfirmRemove = async () => {
-    if (projectToRemove) {
-      await removeProject(projectToRemove.id)
-      setProjectToRemove(null)
-    }
-  }
-
   const handleSelectSession = async (projectId: string, sessionId: string) => {
+    pendingSessionSelectionRef.current = { projectId, sessionId }
     setConfirmArchiveSessionId(null)
     onOpenChat?.()
-    // First select the project
-    selectProject(projectId)
-    // Then select the session
-    await selectSession(projectId, sessionId)
+
+    try {
+      void selectProject(projectId)
+      await selectSession(projectId, sessionId)
+    } finally {
+      if (
+        pendingSessionSelectionRef.current?.projectId === projectId &&
+        pendingSessionSelectionRef.current?.sessionId === sessionId
+      ) {
+        pendingSessionSelectionRef.current = null
+      }
+    }
   }
 
   const handleArchiveIntent = async (
@@ -185,18 +182,12 @@ export function LeftSidebar({
   const BackIcon = SETTINGS_BACK_ICON
   const sidebarWidth = isCollapsed ? 48 : width
   const sidebarTopPadding = isCollapsed ? 12 : 16
-  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null
-  const selectedProjectChat = selectedProject ? getProjectChat(selectedProject.id) : null
-  const archivedSessionIds = new Set(selectedProjectChat?.archivedSessionIds ?? [])
-  const selectedProjectSessions =
-    selectedProjectChat?.sessions.filter((session) => !archivedSessionIds.has(session.id)) ?? []
   const expandedRowClass =
     "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-medium"
   const expandedRowIdleClass =
-    "text-sidebar-foreground/68 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
+    "text-sidebar-foreground/56 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
   const expandedRowActiveClass =
     "bg-[var(--sidebar-item-active)] text-sidebar-accent-foreground"
-  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false)
   const sidebarSurfaceClass = "bg-sidebar"
   const sectionLabelClass =
     "text-sm font-medium uppercase tracking-[0.08em] text-sidebar-foreground/48"
@@ -263,34 +254,18 @@ export function LeftSidebar({
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
-  const handleCreateThreadFromSelectedProject = async () => {
-    if (!selectedProject) {
-      return
+  const handleToggleProjectExpanded = async (project: Project) => {
+    const isExpanded = expandedProjectIds.includes(project.id)
+
+    setExpandedProjectIds((currentIds) =>
+      isExpanded
+        ? currentIds.filter((projectId) => projectId !== project.id)
+        : [...currentIds, project.id]
+    )
+
+    if (!isExpanded) {
+      await loadSessionsForProject(project.id, project.path)
     }
-
-    setConfirmArchiveSessionId(null)
-    onOpenChat?.()
-    await selectProject(selectedProject.id)
-    await openDraftSession(selectedProject.id, selectedProject.path)
-  }
-
-  const handleOpenAutomations = () => {
-    onOpenAutomations?.()
-  }
-
-  const handleSelectWorkspace = async (project: Project) => {
-    setConfirmArchiveSessionId(null)
-    onOpenChat?.()
-    await selectProject(project.id)
-    await loadSessionsForProject(project.id, project.path)
-
-    const projectChat = getProjectChat(project.id)
-    if (projectChat.activeSessionId) {
-      await selectSession(project.id, projectChat.activeSessionId)
-      return
-    }
-
-    await openDraftSession(project.id, project.path)
   }
 
   if (isCollapsed) {
@@ -387,7 +362,7 @@ export function LeftSidebar({
             onPointerDown={handleResizeStart}
             className="absolute inset-y-0 right-0 z-10 w-2 translate-x-1/2 cursor-col-resize"
           >
-            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors hover:bg-sidebar-border/90" />
+            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent  hover:bg-sidebar-border/90" />
           </div>
         ) : null}
       </aside>
@@ -424,141 +399,25 @@ export function LeftSidebar({
       {/* Scrollable content area */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-2 pb-2" style={{ paddingTop: sidebarTopPadding }}>
-          {isCollapsed ? (
-            <div className="mb-4 space-y-1.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => void handleCreateThreadFromSelectedProject()}
-                    disabled={!selectedProject}
-                    className={cn(
-                      "flex h-8 w-full items-center justify-center rounded-lg",
-                      selectedProject
-                        ? "text-sidebar-foreground/76 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
-                        : "cursor-not-allowed text-sidebar-foreground/28",
-                    )}
-                    aria-label="New thread"
-                  >
-                    <PencilSimple size={16} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">New thread</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenu>
-                  <DropdownMenuTrigger className="flex h-8 w-full items-center justify-center rounded-lg text-sidebar-foreground/68 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground cursor-pointer">
-                      <FolderSimplePlus size={16} />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="right" align="end" className="w-48">
-                      <DropdownMenuItem onClick={handleOpenProject}>
-                        <span>Open workspace</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setQuickStartOpen(true)}>
-                        <span>Quick start</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TooltipTrigger>
-                <TooltipContent side="right">Add workspace</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={handleOpenAutomations}
-                    className={cn(
-                      "flex h-8 w-full items-center justify-center rounded-lg",
-                      activeView === "automations"
-                        ? "bg-[var(--sidebar-item-active)] text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground/68 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground",
-                    )}
-                    aria-label="Automations"
-                  >
-                    <Clock size={16} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Automations</TooltipContent>
-              </Tooltip>
-            </div>
-          ) : (
-            <div className="mb-5 space-y-2">
-              {selectedProject ? (
-                <ProjectSelectorDropdown
-                  selectedProject={selectedProject}
-                  onOpenChange={setIsProjectSelectorOpen}
-                  side="bottom"
-                  align="start"
-                  trigger={
-                    <div
-                      className={cn(
-                        "group flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-lg)] px-2 py-2 text-left transition-colors",
-                        isProjectSelectorOpen
-                          ? "bg-[var(--sidebar-item-active)] text-sidebar-accent-foreground ring-1 ring-sidebar-border"
-                          : "text-sidebar-foreground/76",
-                      )}
-                    >
-                    <img
-                      src={getAgentAvatarUrl(selectedProject.avatarSeed)}
-                      alt=""
-                      className="size-6 shrink-0 rounded-[28%] border border-sidebar-border/55 bg-background/10 object-cover"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className="font-sans block truncate text-sm leading-tight font-bold tracking-normal text-sidebar-foreground transition-colors group-hover:text-foreground"
-                      >
-                        {selectedProject.name}
-                      </span>
-                    </span>
-                    <span className="flex shrink-0 flex-col items-center justify-center text-sidebar-foreground/34">
-                      <CaretUp size={10} />
-                      <CaretDown size={10} className="-mt-0.5" />
-                    </span>
-                    </div>
-                  }
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleOpenProject}
-                  className={cn(expandedRowClass, expandedRowIdleClass)}
-                >
-                  <FolderSimplePlus size={15} className="shrink-0" />
-                  <span className="truncate">Open workspace</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => void handleCreateThreadFromSelectedProject()}
-                disabled={!selectedProject}
-                className={cn(
-                  expandedRowClass,
-                  selectedProject
-                    ? expandedRowIdleClass
-                    : "cursor-not-allowed text-sidebar-foreground/32",
-                )}
+          <div className="mb-4 flex items-center justify-between gap-3 px-2">
+            <span className={sectionLabelClass}>Workspaces</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/68  hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
+                aria-label="Add workspace"
               >
-                <PencilSimple size={15} className="shrink-0" />
-                <span className="truncate">New thread</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenAutomations}
-                className={cn(
-                  expandedRowClass,
-                  activeView === "automations" ? expandedRowActiveClass : expandedRowIdleClass,
-                )}
-              >
-                <Clock size={15} className="shrink-0" />
-                <span className="truncate">Automations</span>
-              </button>
-            </div>
-          )}
+                <FolderSimplePlus size={16} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="bottom" align="end" className="w-48">
+                <DropdownMenuItem onClick={handleOpenProject}>
+                  <span>Open workspace</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setQuickStartOpen(true)}>
+                  <span>Quick start</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           {projects.length === 0 ? (
             !isCollapsed && (
@@ -574,145 +433,157 @@ export function LeftSidebar({
                 </button>
               </div>
             )
-          ) : isCollapsed ? (
-            <div className="space-y-0.5">
+          ) : isCollapsed ? null : (
+            <div className="space-y-1">
               {projects.map((project) => {
-                const isSelected = selectedProjectId === project.id
+                const projectChat = getProjectChat(project.id)
+                const archivedSessionIds = new Set(projectChat.archivedSessionIds ?? [])
+                const projectSessions = projectChat.sessions.filter(
+                  (session): session is Session =>
+                    session != null &&
+                    typeof session.id === "string" &&
+                    !archivedSessionIds.has(session.id)
+                )
+                const isExpanded = expandedProjectIds.includes(project.id)
 
                 return (
-                  <Tooltip key={project.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => void handleSelectWorkspace(project)}
-                        className={cn(
-                          "w-full flex items-center justify-center p-1 rounded-lg",
-                          isSelected
-                            ? "bg-[var(--sidebar-item-active)]"
-                            : "hover:bg-[var(--sidebar-item-hover)]"
-                        )}
-                      >
-                        <img
-                          src={getAgentAvatarUrl(project.avatarSeed)}
-                          alt=""
-                          className="size-5 rounded-[28%] object-cover"
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">{project.name}</TooltipContent>
-                  </Tooltip>
+                  <div key={project.id} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleProjectExpanded(project)}
+                      className={cn(
+                        "group/project flex h-8 w-full items-center gap-2 rounded-md px-2 text-left",
+                        "text-sidebar-foreground/48 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground/72",
+                      )}
+                      aria-label={isExpanded ? `Collapse ${project.name}` : `Expand ${project.name}`}
+                      aria-expanded={isExpanded}
+                    >
+                      <span className="relative flex size-5 shrink-0 items-center justify-center">
+                        <span className="flex size-5 items-center justify-center rounded-md border border-sidebar-border/45 bg-background/10 p-0.5 group-hover/project:opacity-0">
+                          <img
+                            src={getAgentAvatarUrl(project.avatarSeed)}
+                            alt=""
+                            className="size-full rounded-[20%] object-cover"
+                          />
+                        </span>
+                        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/project:opacity-100">
+                          {isExpanded ? <CaretDown size={12} /> : <CaretRight size={12} />}
+                        </span>
+                      </span>
+                      <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                        <span className="truncate text-sm font-medium">{project.name}</span>
+                      </span>
+                    </button>
+
+                    {(() => {
+                      if (!isExpanded) return null
+
+                      if (projectSessions.length === 0) {
+                        return (
+                          <div className="pt-1">
+                            <div className="px-2 py-1.5 text-[13px] text-sidebar-foreground/36">
+                              No threads yet.
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="space-y-0.5 pt-0.5">
+                          {projectSessions.map((session) => {
+                            const activePromptState = activePromptBySession[session.id]
+                            const isAwaitingResponse = activePromptState?.status === "active"
+                            const isActiveSession = currentSessionId === session.id
+                            const isRunningSession =
+                              session.id === currentSessionId &&
+                              (status === "streaming" ||
+                                status === "connecting" ||
+                                isAwaitingResponse)
+                            const isConfirmingArchive = confirmArchiveSessionId === session.id
+
+                            return (
+                              <div
+                                key={session.id}
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => void handleSelectSession(project.id, session.id)}
+                                onKeyDown={(event) => {
+                                  if (event.key !== "Enter" && event.key !== " ") {
+                                    return
+                                  }
+
+                                  event.preventDefault()
+                                  void handleSelectSession(project.id, session.id)
+                                }}
+                                onMouseLeave={() => {
+                                  if (confirmArchiveSessionId === session.id) {
+                                    setConfirmArchiveSessionId(null)
+                                  }
+                                }}
+                                className={cn(
+                                  "group/session flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/60",
+                                  "text-sidebar-foreground/48 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground/72",
+                                  isActiveSession && "bg-[var(--sidebar-item-active)]",
+                                )}
+                              >
+                                {isRunningSession ? (
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                                    <span className="size-3 rounded-full border border-sidebar-foreground/18 border-t-sidebar-foreground/62 animate-spin" />
+                                  </span>
+                                ) : (
+                                  <span className="h-4 w-4 shrink-0" />
+                                )}
+
+                                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left">
+                                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-none">
+                                    {formatSessionTitle(session)}
+                                  </span>
+                                  {isAwaitingResponse ? (
+                                    <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-emerald-500/14 px-2 text-[11px] font-medium text-emerald-400">
+                                      Awaiting response
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div
+                                  className={cn(
+                                    "flex shrink-0 items-center justify-end",
+                                    isConfirmingArchive ? "min-w-[4.75rem]" : "w-7"
+                                  )}
+                                >
+                                  {isConfirmingArchive ? (
+                                    <button
+                                      type="button"
+                                      onClick={(event) =>
+                                        void handleArchiveIntent(event, project.id, session.id)
+                                      }
+                                      className="rounded-full border border-border/70 bg-muted/60 px-2 py-0.5 text-sm font-medium tracking-tight text-destructive hover:bg-muted/80"
+                                      aria-label="Confirm archive session"
+                                    >
+                                      Confirm
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(event) =>
+                                        void handleArchiveIntent(event, project.id, session.id)
+                                      }
+                                      className="rounded p-1 opacity-0  hover:bg-[var(--sidebar-item-hover)] focus-visible:opacity-100 group-hover/session:opacity-100"
+                                      aria-label="Archive session"
+                                    >
+                                      <Archive size={14} className="text-muted-foreground" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 )
               })}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <section className="space-y-1">
-                <div className="flex items-center justify-between px-2 pb-1">
-                  <span className={sectionLabelClass}>
-                    Threads
-                  </span>
-                </div>
-
-                {selectedProject ? (
-                  <div className="space-y-1">
-                    {selectedProjectSessions.length === 0 ? (
-                      <div className="px-2 py-2 text-sm text-muted-foreground">
-                        No threads yet.
-                      </div>
-                    ) : (
-                      selectedProjectSessions
-                        .filter(
-                          (session): session is Session =>
-                            session != null && typeof session.id === "string"
-                        )
-                        .map((session) => {
-                          const activePromptState = activePromptBySession[session.id]
-                          const isAwaitingResponse = activePromptState?.status === "active"
-                          const isActiveSession = selectedProjectChat?.activeSessionId === session.id
-                          const isRunningSession =
-                            session.id === currentSessionId &&
-                            (status === "streaming" ||
-                              status === "connecting" ||
-                              isAwaitingResponse)
-                          const isConfirmingArchive = confirmArchiveSessionId === session.id
-
-                          return (
-                            <div
-                              key={session.id}
-                              onMouseLeave={() => {
-                                if (confirmArchiveSessionId === session.id) {
-                                  setConfirmArchiveSessionId(null)
-                                }
-                              }}
-                              className={cn(
-                                "group/session flex h-8 items-center gap-2 rounded-lg px-2",
-                                isActiveSession
-                                  ? "bg-[var(--sidebar-item-active)] text-sidebar-foreground"
-                                  : "text-sidebar-foreground/68 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground",
-                              )}
-                            >
-                              {isRunningSession ? (
-                                <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                                  <span className="size-3 rounded-full border border-sidebar-foreground/18 border-t-sidebar-foreground/62 animate-spin" />
-                                </span>
-                              ) : null}
-
-                              <button
-                                type="button"
-                                onClick={() => handleSelectSession(selectedProject.id, session.id)}
-                                className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
-                              >
-                                <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-none">
-                                  {formatSessionTitle(session)}
-                                </span>
-                                {isAwaitingResponse ? (
-                                  <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-emerald-500/14 px-2 text-sm font-medium text-emerald-400">
-                                    Awaiting response
-                                  </span>
-                                ) : null}
-                              </button>
-
-                              <div
-                                className={cn(
-                                  "flex shrink-0 items-center justify-end",
-                                  isConfirmingArchive ? "min-w-[4.75rem]" : "w-7"
-                                )}
-                              >
-                                {isConfirmingArchive ? (
-                                  <button
-                                    type="button"
-                                    onClick={(event) =>
-                                      void handleArchiveIntent(event, selectedProject.id, session.id)
-                                    }
-                                    className="rounded-full border border-border/70 bg-muted/60 px-2 py-0.5 text-sm font-medium tracking-tight text-destructive hover:bg-muted/80"
-                                    aria-label="Confirm archive session"
-                                  >
-                                    Confirm
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={(event) =>
-                                      void handleArchiveIntent(event, selectedProject.id, session.id)
-                                    }
-                                    className="rounded p-1 opacity-0 transition-opacity hover:bg-[var(--sidebar-item-hover)] focus-visible:opacity-100 group-hover/session:opacity-100"
-                                    aria-label="Archive session"
-                                  >
-                                    <Archive size={14} className="text-muted-foreground" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-sidebar-border/45 bg-background px-2 py-2 text-sm text-sidebar-foreground/50">
-                    Select a workspace to see its threads.
-                  </div>
-                )}
-              </section>
             </div>
           )}
         </div>
@@ -765,27 +636,10 @@ export function LeftSidebar({
           onPointerDown={handleResizeStart}
           className="absolute inset-y-0 right-0 z-10 w-2 translate-x-1/2 cursor-col-resize"
         >
-          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors hover:bg-sidebar-border/90" />
+          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent  hover:bg-sidebar-border/90" />
         </div>
       ) : null}
 
-      <AlertDialog open={!!projectToRemove} onOpenChange={(open) => !open && setProjectToRemove(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove project?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will only remove <strong>{projectToRemove?.name}</strong> from Nucleus.
-              The folder and its contents will not be deleted from your computer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmRemove}>
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </aside>
   )
 }

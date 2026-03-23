@@ -222,6 +222,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadSessionsForProject: async (projectId: string, projectPath: string) => {
     const { chatByProject } = get()
     const projectChat = chatByProject[projectId] ?? createDefaultProjectChat(projectPath)
+    const hasExistingProjectChat = chatByProject[projectId] != null
+
+    if (hasExistingProjectChat && projectChat.projectPath === projectPath) {
+      return
+    }
 
     set({
       chatByProject: {
@@ -233,7 +238,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       },
     })
 
-    await get()._persistState()
+    void get()._persistState()
   },
 
   openDraftSession: async (projectId: string, projectPath: string) => {
@@ -319,6 +324,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return
     }
 
+    if (projectChat.activeSessionId === sessionId && get().currentSessionId === sessionId) {
+      return
+    }
+
     set({
       chatByProject: {
         ...chatByProject,
@@ -334,7 +343,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       error: null,
     })
 
-    await get()._persistState()
+    void get()._persistState()
   },
 
   deleteSession: async (projectId: string, sessionId: string) => {

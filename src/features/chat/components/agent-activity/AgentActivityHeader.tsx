@@ -55,7 +55,7 @@ export function AgentActivityHeader({
         {text}
       </span>
 
-      <span className="text-muted-foreground/70">
+      <span className="text-muted-foreground/70 tabular-nums">
         · {elapsedTime}
       </span>
 

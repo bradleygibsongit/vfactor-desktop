@@ -4,7 +4,7 @@ export function formatElapsedDuration(durationMs: number): string {
   const safeDurationMs = Math.max(0, durationMs)
 
   if (safeDurationMs < 1000) {
-    return `${Math.floor(safeDurationMs)}ms`
+    return `${(safeDurationMs / 1000).toFixed(2)}s`
   }
 
   if (safeDurationMs < 60_000) {

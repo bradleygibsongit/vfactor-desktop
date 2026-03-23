@@ -1,5 +1,10 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { SETTINGS_SECTIONS, type SettingsSectionId } from "@/features/settings/config"
+import {
+  formatShortcutBinding,
+  getShortcutBinding,
+  getShortcutDefinition,
+} from "@/features/settings/shortcuts"
 import { Switch } from "@/features/shared/components/ui/switch"
 import { UpdatesSection } from "@/features/updates/components/UpdatesSection"
 import { cn } from "@/lib/utils"
@@ -24,6 +29,9 @@ interface SettingGroupDefinition {
 interface SettingsPageProps {
   activeSection: SettingsSectionId
 }
+
+const planModeShortcutDefinition = getShortcutDefinition("toggle-plan-mode")
+const planModeShortcutLabel = formatShortcutBinding(getShortcutBinding("toggle-plan-mode"))
 
 const SETTINGS_CONTENT: Record<
   SettingsSectionId,
@@ -89,6 +97,16 @@ const SETTINGS_CONTENT: Record<
             title: "Use pointer cursors",
             description: "Change the cursor to a pointer over interactive elements.",
             control: { type: "toggle", enabled: true },
+          },
+        ],
+      },
+      {
+        title: "Keyboard shortcuts",
+        rows: [
+          {
+            title: planModeShortcutDefinition.title,
+            description: `${planModeShortcutDefinition.description} Custom shortcut editing will live here.`,
+            control: { type: "pill", value: planModeShortcutLabel },
           },
         ],
       },

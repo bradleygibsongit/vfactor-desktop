@@ -96,13 +96,15 @@ function createIcon(name: string, icon: IconSvgElement): Icon {
 }
 
 export const InformationCircle = forwardRef(function InformationCircleIcon(
-  { strokeWidth = 1.8, ...props }: IconProps,
+  { size = 24, strokeWidth = 1.8, ...props }: IconProps,
   ref: Ref<SVGSVGElement>
 ) {
   return (
     <svg
       ref={ref}
       viewBox="0 0 24 24"
+      width={size}
+      height={size}
       fill="none"
       stroke="currentColor"
       strokeWidth={strokeWidth}
@@ -118,6 +120,31 @@ export const InformationCircle = forwardRef(function InformationCircleIcon(
   )
 }) as Icon
 InformationCircle.displayName = "InformationCircle"
+
+export const Copy = forwardRef(function CopyIcon(
+  { size = 24, strokeWidth = 1.8, ...props }: IconProps,
+  ref: Ref<SVGSVGElement>
+) {
+  return (
+    <svg
+      ref={ref}
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <rect x="9" y="7" width="11" height="13" rx="2.5" />
+      <path d="M15 7V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h1" />
+    </svg>
+  )
+}) as Icon
+Copy.displayName = "Copy"
 
 export const Archive = createIcon("Archive", Archive03Icon)
 export const ArrowDown = createIcon("ArrowDown", ArrowDown01Icon)
