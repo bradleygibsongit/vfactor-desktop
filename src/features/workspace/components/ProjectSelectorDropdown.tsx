@@ -8,8 +8,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/features/shared/components/ui/dropdown-menu"
+import { ProjectAvatar } from "@/features/workspace/components/ProjectAvatar"
 import { useProjectStore } from "@/features/workspace/store"
-import { getAgentAvatarUrl } from "@/features/workspace/utils/avatar"
 import { openFolderPicker } from "@/features/workspace/utils/folderDialog"
 import { cn } from "@/lib/utils"
 
@@ -70,11 +70,7 @@ export function ProjectSelectorDropdown({
                 onClick={() => void handleSelectProject(project.id)}
                 className="flex items-center gap-2 px-2 py-2"
               >
-                <img
-                  src={getAgentAvatarUrl(project.avatarSeed)}
-                  alt=""
-                  className="size-6 shrink-0 rounded-[28%] border border-border/60 bg-background/10 object-cover"
-                />
+                <ProjectDropdownAvatar project={project} />
                 <span className="min-w-0 flex-1">
                   <span className="font-sans block truncate text-sm leading-tight font-bold text-sidebar-foreground">
                     {project.name}
@@ -97,5 +93,14 @@ export function ProjectSelectorDropdown({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function ProjectDropdownAvatar({ project }: { project: Project }) {
+  return (
+    <ProjectAvatar
+      project={project}
+      className="size-6 border border-border/60"
+    />
   )
 }
