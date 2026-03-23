@@ -13,11 +13,14 @@ import {
 } from "./ai-elements/message"
 import type { ChildSessionData } from "./agent-activity/AgentActivitySubagent"
 import { getFileChangeEntries, getToolPart } from "./timelineActivity"
+import { formatElapsedDuration, useElapsedDuration } from "./workDuration"
 
 interface ChatTimelineItemProps {
   message: MessageWithParts
   isStreaming: boolean
   childSessions?: Map<string, ChildSessionData>
+  workStartTime?: number
+  completedWorkDurationMs?: number
 }
 
 function getMessageText(parts: RuntimeMessagePart[]): string {
@@ -32,11 +35,13 @@ function TimelineTextBlock({
   text,
   isStreaming,
   tone = "default",
+  workLabel,
 }: {
   eyebrow?: string
   text: string
   isStreaming: boolean
   tone?: "default" | "muted" | "accent"
+  workLabel?: string
 }) {
   if (tone === "default") {
     return (
@@ -48,6 +53,11 @@ function TimelineTextBlock({
           >
             {text}
           </MessageResponse>
+          {workLabel ? (
+            <div className="text-xs tracking-[0.01em] text-muted-foreground/80">
+              {workLabel}
+            </div>
+          ) : null}
         </MessageContent>
       </MessageComponent>
     )
@@ -71,10 +81,39 @@ function TimelineTextBlock({
           >
             {text}
           </MessageResponse>
+          {workLabel ? (
+            <div className="mt-2 text-xs tracking-[0.01em] text-muted-foreground/80">
+              {workLabel}
+            </div>
+          ) : null}
         </div>
       </MessageContent>
     </MessageComponent>
   )
+}
+
+function useAssistantWorkLabel({
+  startTime,
+  isActive,
+  completedDurationMs,
+}: {
+  startTime?: number
+  isActive: boolean
+  completedDurationMs?: number
+}) {
+  const elapsed = useElapsedDuration(startTime, isActive, startTime && completedDurationMs != null
+    ? startTime + completedDurationMs
+    : undefined)
+
+  if (isActive && elapsed) {
+    return elapsed
+  }
+
+  if (completedDurationMs != null) {
+    return `Worked for ${formatElapsedDuration(completedDurationMs)}`
+  }
+
+  return null
 }
 
 function getBaseName(path: string): string {
@@ -552,9 +591,16 @@ export function ChatTimelineItem({
   message,
   isStreaming,
   childSessions,
+  workStartTime,
+  completedWorkDurationMs,
 }: ChatTimelineItemProps) {
   const text = getMessageText(message.parts)
   const toolPart = getToolPart(message.parts)
+  const workLabel = useAssistantWorkLabel({
+    startTime: workStartTime,
+    isActive: isStreaming,
+    completedDurationMs: completedWorkDurationMs,
+  })
 
   if (message.info.role === "user") {
     if (!text.trim()) {
@@ -582,12 +628,18 @@ export function ChatTimelineItem({
   const phase = message.info.phase
 
   if (itemType === "reasoning") {
-    return <TimelineTextBlock text={text} isStreaming={isStreaming} />
+    return <TimelineTextBlock text={text} isStreaming={isStreaming} workLabel={workLabel ?? undefined} />
   }
 
   if (itemType === "plan") {
     return (
-      <TimelineTextBlock eyebrow="Plan" text={text} isStreaming={isStreaming} tone="accent" />
+      <TimelineTextBlock
+        eyebrow="Plan"
+        text={text}
+        isStreaming={isStreaming}
+        tone="accent"
+        workLabel={workLabel ?? undefined}
+      />
     )
   }
 
@@ -598,19 +650,26 @@ export function ChatTimelineItem({
         text={text}
         isStreaming={isStreaming}
         tone="accent"
+        workLabel={workLabel ?? undefined}
       />
     )
   }
 
   if (itemType === "approval") {
     return (
-      <TimelineTextBlock eyebrow="Approval" text={text} isStreaming={isStreaming} tone="muted" />
+      <TimelineTextBlock
+        eyebrow="Approval"
+        text={text}
+        isStreaming={isStreaming}
+        tone="muted"
+        workLabel={workLabel ?? undefined}
+      />
     )
   }
 
   if (phase === "commentary") {
-    return <TimelineTextBlock text={text} isStreaming={isStreaming} />
+    return <TimelineTextBlock text={text} isStreaming={isStreaming} workLabel={workLabel ?? undefined} />
   }
 
-  return <TimelineTextBlock text={text} isStreaming={isStreaming} />
+  return <TimelineTextBlock text={text} isStreaming={isStreaming} workLabel={workLabel ?? undefined} />
 }

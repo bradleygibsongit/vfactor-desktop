@@ -65,7 +65,11 @@ export function shouldRecreateRemoteSession(session: RuntimeSession, error: unkn
   }
 
   const message = String(error)
-  return message.includes("no rollout found for thread id")
+  return (
+    message.includes("no rollout found for thread id") ||
+    message.includes("failed to load rollout") ||
+    (message.includes("rollout at") && message.includes("is empty"))
+  )
 }
 
 export {

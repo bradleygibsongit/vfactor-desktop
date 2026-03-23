@@ -18,6 +18,7 @@ import { getAgentAvatarUrl } from "@/features/workspace/utils/avatar"
 import { useStickToBottomContext } from "use-stick-to-bottom"
 import { isRuntimeApprovalPrompt } from "../domain/runtimePrompts"
 import { ChatTimelineItem, InlineSubagentActivity, ToolTimelineRow } from "./ChatTimelineItem"
+import { formatElapsedDuration, useElapsedDuration } from "./workDuration"
 import {
   buildTimelineBlocks,
   getActivityGroupSummary,
@@ -194,6 +195,12 @@ export function ChatMessages({
   const lastMessage = renderedMessages[renderedMessages.length - 1]
   const shouldRenderStreamingPlaceholder =
     status === "streaming" && !activePrompt && (!lastMessage || lastMessage.info.role === "user")
+  const [activeWorkStartTime, setActiveWorkStartTime] = useState<number | null>(null)
+  const [lastCompletedWork, setLastCompletedWork] = useState<{
+    messageId: string
+    durationMs: number
+  } | null>(null)
+  const previousStatusRef = useRef(status)
 
   useEffect(() => {
     const activeGroupKeys = activityGroups
@@ -251,6 +258,36 @@ export function ChatMessages({
     }
   }, [activityGroups])
 
+  useEffect(() => {
+    const previousStatus = previousStatusRef.current
+
+    if (previousStatus !== "streaming" && status === "streaming") {
+      setActiveWorkStartTime(Date.now())
+      setLastCompletedWork(null)
+    }
+
+    if (previousStatus === "streaming" && status !== "streaming" && activeWorkStartTime != null) {
+      const lastAssistantMessage = [...renderedMessages]
+        .reverse()
+        .find(
+          (message) =>
+            message.info.role === "assistant" &&
+            message.parts.some((part) => part.type === "text" && part.text.trim())
+        )
+
+      if (lastAssistantMessage) {
+        setLastCompletedWork({
+          messageId: lastAssistantMessage.info.id,
+          durationMs: Date.now() - activeWorkStartTime,
+        })
+      }
+
+      setActiveWorkStartTime(null)
+    }
+
+    previousStatusRef.current = status
+  }, [activeWorkStartTime, renderedMessages, status])
+
   // Convert ChildSessionState to ChildSessionData for the component
   const childSessionData: Map<string, ChildSessionData> | undefined = childSessions 
     ? new Map(
@@ -307,6 +344,16 @@ export function ChatMessages({
                 message={block.message}
                 isStreaming={status === "streaming" && block.message.info.id === lastMessage?.info.id}
                 childSessions={childSessionData}
+                workStartTime={
+                  status === "streaming" && block.message.info.id === lastMessage?.info.id
+                    ? activeWorkStartTime ?? undefined
+                    : undefined
+                }
+                completedWorkDurationMs={
+                  block.message.info.id === lastCompletedWork?.messageId
+                    ? lastCompletedWork.durationMs
+                    : undefined
+                }
               />
             ) : (
               <TimelineActivityGroup
@@ -314,6 +361,7 @@ export function ChatMessages({
                 group={block}
                 childSessions={childSessionData}
                 isOpen={isActivityGroupActive(block) ? true : groupOpenByKey[block.key] ?? true}
+                activeWorkStartTime={activeWorkStartTime ?? undefined}
                 onToggle={() =>
                   setGroupOpenByKey((previous) => ({
                     ...previous,
@@ -331,7 +379,7 @@ export function ChatMessages({
             </div>
           ) : null}
           {shouldRenderStreamingPlaceholder ? (
-            <StreamingAssistantPlaceholder isAskingQuestion={!!activePrompt} />
+            <StreamingAssistantPlaceholder startTime={activeWorkStartTime} />
           ) : null}
         </>
       </ConversationContent>
@@ -378,15 +426,18 @@ function TimelineActivityGroup({
   group,
   childSessions,
   isOpen,
+  activeWorkStartTime,
   onToggle,
 }: {
   group: TimelineActivityGroupBlock
   childSessions?: Map<string, ChildSessionData>
   isOpen: boolean
+  activeWorkStartTime?: number
   onToggle: () => void
 }) {
   const isActive = isActivityGroupActive(group)
   const summary = getActivityGroupSummary(group)
+  const activeDuration = useElapsedDuration(activeWorkStartTime, isActive)
 
   return (
     <MessageComponent from="assistant">
@@ -395,6 +446,9 @@ function TimelineActivityGroup({
           {isActive ? (
             <div className="inline-flex max-w-full items-center gap-1.5 text-left">
               <span className="min-w-0">{summary}</span>
+              {activeDuration ? (
+                <span className="shrink-0 text-muted-foreground/80">· {activeDuration}</span>
+              ) : null}
             </div>
           ) : (
             <button
@@ -435,16 +489,18 @@ function TimelineActivityGroup({
 }
 
 function StreamingAssistantPlaceholder({
-  isAskingQuestion,
+  startTime,
 }: {
-  isAskingQuestion: boolean
+  startTime: number | null
 }) {
+  const elapsed = useElapsedDuration(startTime, true)
+
   return (
     <MessageComponent from="assistant">
       <MessageContent>
         <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
           <LoadingDots />
-          <span>{isAskingQuestion ? "Asking a question" : "Thinking"}</span>
+          <span>{elapsed ?? formatElapsedDuration(0)}</span>
         </div>
       </MessageContent>
     </MessageComponent>
