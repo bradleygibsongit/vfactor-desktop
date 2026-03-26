@@ -9,6 +9,7 @@ import type {
   RuntimePrompt,
   RuntimeSession,
 } from "../types"
+import { desktop } from "@/desktop/client"
 import { getRuntimeModelLabel } from "../domain/runtimeModels"
 import { getRemoteSessionId } from "../domain/runtimeSessions"
 import { mapTurnItemsToMessages } from "./codexMessageMapper"
@@ -37,6 +38,29 @@ import {
 import { getCodexRpcClient } from "./codexRpcClient"
 import { waitForCodexTurnCompletion } from "./codexTurnTracker"
 
+type CodexSessionPermissionPreset = {
+  approvalPolicy: "on-request"
+  sandbox: "read-only" | "workspace-write"
+}
+
+async function getDefaultCodexSessionPermissionPreset(
+  projectPath: string
+): Promise<CodexSessionPermissionPreset> {
+  try {
+    await desktop.git.getBranches(projectPath)
+
+    return {
+      approvalPolicy: "on-request",
+      sandbox: "workspace-write",
+    }
+  } catch {
+    return {
+      approvalPolicy: "on-request",
+      sandbox: "read-only",
+    }
+  }
+}
+
 export class CodexHarnessAdapter implements HarnessAdapter {
   private rpc = getCodexRpcClient()
   private activeTurns = new Map<string, string>()
@@ -52,13 +76,14 @@ export class CodexHarnessAdapter implements HarnessAdapter {
 
   async createSession(projectPath: string): Promise<RuntimeSession> {
     await this.initialize()
+    const permissionPreset = await getDefaultCodexSessionPermissionPreset(projectPath)
 
     const response = await this.rpc.request<{
       thread: CodexThread
     }>("thread/start", {
       cwd: projectPath,
-      approvalPolicy: "untrusted",
-      sandbox: "workspace-write",
+      approvalPolicy: permissionPreset.approvalPolicy,
+      sandbox: permissionPreset.sandbox,
       experimentalRawEvents: false,
       persistExtendedHistory: false,
     })
