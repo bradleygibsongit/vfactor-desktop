@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo } from "react"
 import { desktop } from "@/desktop/client"
 import { CaretDown, CaretUp, Plus, X } from "@/components/icons"
 import { Separator } from "@/features/shared/components/ui"
 import { cn } from "@/lib/utils"
 import { Terminal } from "./Terminal"
+import { useTerminalStore } from "@/features/terminal/store/terminalStore"
 
 interface TerminalPanelProps {
   projectId: string | null
@@ -11,64 +12,27 @@ interface TerminalPanelProps {
   className?: string
 }
 
-interface TerminalTab {
-  id: string
-}
-
-interface ProjectTerminalState {
-  tabs: TerminalTab[]
-  activeTabId: string | null
-  isCollapsed: boolean
-}
-
 const EMPTY_MESSAGE = "\x1b[90mSelect a project to open a terminal.\x1b[0m"
-let cachedTerminalStateByProject: Record<string, ProjectTerminalState> = {}
-
-function createTerminalTab(projectId: string): TerminalTab {
-  return {
-    id: `${projectId}:${crypto.randomUUID()}`,
-  }
-}
 
 function getTerminalLabel(index: number, totalTabs: number) {
   return totalTabs <= 1 ? "Terminal" : `Terminal ${index + 1}`
 }
 
-function createProjectTerminalState(projectId: string) {
-  const firstTab = createTerminalTab(projectId)
-
-  return {
-    tabs: [firstTab],
-    activeTabId: firstTab.id,
-    isCollapsed: false,
-  }
-}
-
 export function TerminalPanel({ projectId, projectPath, className }: TerminalPanelProps) {
-  const [terminalStateByProject, setTerminalStateByProject] = useState<Record<string, ProjectTerminalState>>(
-    () => cachedTerminalStateByProject
-  )
-
-  useEffect(() => {
-    cachedTerminalStateByProject = terminalStateByProject
-  }, [terminalStateByProject])
+  const terminalStateByProject = useTerminalStore((state) => state.terminalStateByProject)
+  const ensureProject = useTerminalStore((state) => state.ensureProject)
+  const addTerminal = useTerminalStore((state) => state.addTerminal)
+  const selectTerminal = useTerminalStore((state) => state.selectTerminal)
+  const toggleProjectCollapsed = useTerminalStore((state) => state.toggleProjectCollapsed)
+  const closeTerminal = useTerminalStore((state) => state.closeTerminal)
 
   useEffect(() => {
     if (!projectId) {
       return
     }
 
-    setTerminalStateByProject((current) => {
-      if (current[projectId]) {
-        return current
-      }
-
-      return {
-        ...current,
-        [projectId]: createProjectTerminalState(projectId),
-      }
-    })
-  }, [projectId])
+    ensureProject(projectId)
+  }, [ensureProject, projectId])
 
   const currentProjectState = useMemo(() => {
     if (!projectId) {
@@ -91,20 +55,7 @@ export function TerminalPanel({ projectId, projectPath, className }: TerminalPan
       return
     }
 
-    setTerminalStateByProject((current) => {
-      const projectState = current[projectId] ?? createProjectTerminalState(projectId)
-      const nextTab = createTerminalTab(projectId)
-
-      return {
-        ...current,
-        [projectId]: {
-          ...projectState,
-          tabs: [...projectState.tabs, nextTab],
-          activeTabId: nextTab.id,
-          isCollapsed: false,
-        },
-      }
-    })
+    addTerminal(projectId)
   }
 
   const handleSelectTerminal = (tabId: string) => {
@@ -112,21 +63,7 @@ export function TerminalPanel({ projectId, projectPath, className }: TerminalPan
       return
     }
 
-    setTerminalStateByProject((current) => {
-      const projectState = current[projectId]
-      if (!projectState) {
-        return current
-      }
-
-      return {
-        ...current,
-        [projectId]: {
-          ...projectState,
-          activeTabId: tabId,
-          isCollapsed: false,
-        },
-      }
-    })
+    selectTerminal(projectId, tabId)
   }
 
   const handleToggleCollapsed = () => {
@@ -134,17 +71,7 @@ export function TerminalPanel({ projectId, projectPath, className }: TerminalPan
       return
     }
 
-    setTerminalStateByProject((current) => {
-      const projectState = current[projectId] ?? createProjectTerminalState(projectId)
-
-      return {
-        ...current,
-        [projectId]: {
-          ...projectState,
-          isCollapsed: !projectState.isCollapsed,
-        },
-      }
-    })
+    toggleProjectCollapsed(projectId)
   }
 
   const handleCloseTerminal = (tabId: string) => {
@@ -156,35 +83,7 @@ export function TerminalPanel({ projectId, projectPath, className }: TerminalPan
       console.error("Failed to close terminal session:", error)
     })
 
-    setTerminalStateByProject((current) => {
-      const projectState = current[projectId] ?? createProjectTerminalState(projectId)
-      const nextTabs = projectState.tabs.filter((tab) => tab.id !== tabId)
-
-      if (nextTabs.length === 0) {
-        return {
-          ...current,
-          [projectId]: {
-            ...projectState,
-            tabs: [],
-            activeTabId: null,
-          },
-        }
-      }
-
-      const currentIndex = projectState.tabs.findIndex((tab) => tab.id === tabId)
-      const fallbackTab = nextTabs[Math.max(0, currentIndex - 1)] ?? nextTabs[0]
-      const nextActiveTabId =
-        projectState.activeTabId === tabId ? fallbackTab.id : projectState.activeTabId
-
-      return {
-        ...current,
-        [projectId]: {
-          ...projectState,
-          tabs: nextTabs,
-          activeTabId: nextActiveTabId,
-        },
-      }
-    })
+    closeTerminal(projectId, tabId)
   }
 
   const isCollapsed = currentProjectState?.isCollapsed ?? false

@@ -1,7 +1,8 @@
 import { create } from "zustand"
 import { desktop, loadDesktopStore, type DesktopStoreHandle } from "@/desktop/client"
-import type { Project } from "../types"
+import type { Project, ProjectAction } from "../types"
 import { normalizeProjectIconPath } from "../utils/projectIcon"
+import { normalizeProjectActionIconName } from "../utils/projectActionIcons"
 
 const STORE_FILE = "projects.json"
 const STORE_KEY = "projects"
@@ -21,6 +22,17 @@ interface ProjectState {
   setProjectOrder: (projects: Project[]) => Promise<void>
   selectProject: (id: string) => Promise<void>
   updateProject: (id: string, updates: Partial<Pick<Project, "name" | "iconPath">>) => Promise<void>
+  addProjectAction: (
+    projectId: string,
+    action: Omit<ProjectAction, "id" | "createdAt">
+  ) => Promise<ProjectAction>
+  updateProjectAction: (
+    projectId: string,
+    actionId: string,
+    updates: Omit<ProjectAction, "id" | "createdAt">
+  ) => Promise<ProjectAction>
+  deleteProjectAction: (projectId: string, actionId: string) => Promise<void>
+  setPrimaryAction: (projectId: string, actionId: string) => Promise<void>
   setDefaultLocation: (path: string) => Promise<void>
 }
 
@@ -34,9 +46,24 @@ async function getStore(): Promise<DesktopStoreHandle> {
 }
 
 function hydrateProject(project: Project): Project {
+      const actions = Array.isArray(project.actions)
+    ? project.actions.map((action) => ({
+        ...action,
+        iconName: normalizeProjectActionIconName(action.iconName),
+        iconPath: normalizeProjectIconPath(action.iconPath),
+        hotkey: action.hotkey ?? null,
+      }))
+    : []
+  const primaryActionId =
+    project.primaryActionId && actions.some((action) => action.id === project.primaryActionId)
+      ? project.primaryActionId
+      : actions[0]?.id ?? null
+
   return {
     ...project,
     iconPath: normalizeProjectIconPath(project.iconPath),
+    actions,
+    primaryActionId,
   }
 }
 
@@ -179,6 +206,142 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           }
         : project
     )
+
+    const store = await getStore()
+    await store.set(STORE_KEY, updatedProjects)
+    await store.save()
+
+    set({ projects: updatedProjects })
+  },
+
+  addProjectAction: async (projectId, action) => {
+    const nextAction: ProjectAction = {
+      ...action,
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+      name: action.name.trim(),
+      iconName: normalizeProjectActionIconName(action.iconName),
+      iconPath: normalizeProjectIconPath(action.iconPath),
+      hotkey: action.hotkey ?? null,
+      command: action.command.trim(),
+    }
+
+    const { projects } = get()
+    let created = false
+    const updatedProjects = projects.map((project) => {
+      if (project.id !== projectId) {
+        return project
+      }
+
+      created = true
+      const nextActions = [...(project.actions ?? []), nextAction]
+
+      return {
+        ...project,
+        actions: nextActions,
+        primaryActionId: nextAction.id,
+      }
+    })
+
+    if (!created) {
+      throw new Error(`Unknown project: ${projectId}`)
+    }
+
+    const store = await getStore()
+    await store.set(STORE_KEY, updatedProjects)
+    await store.save()
+
+    set({ projects: updatedProjects })
+    return nextAction
+  },
+
+  updateProjectAction: async (projectId, actionId, updates) => {
+    const { projects } = get()
+    let updatedAction: ProjectAction | null = null
+
+    const updatedProjects = projects.map((project) => {
+      if (project.id !== projectId) {
+        return project
+      }
+
+      return {
+        ...project,
+        actions: (project.actions ?? []).map((action) => {
+          if (action.id !== actionId) {
+            return action
+          }
+
+          updatedAction = {
+            ...action,
+            name: updates.name.trim(),
+            iconName: normalizeProjectActionIconName(updates.iconName),
+            iconPath: normalizeProjectIconPath(updates.iconPath),
+            hotkey: updates.hotkey ?? null,
+            command: updates.command.trim(),
+          }
+
+          return updatedAction
+        }),
+      }
+    })
+
+    if (!updatedAction) {
+      throw new Error(`Unknown project action: ${projectId}/${actionId}`)
+    }
+
+    const store = await getStore()
+    await store.set(STORE_KEY, updatedProjects)
+    await store.save()
+
+    set({ projects: updatedProjects })
+    return updatedAction
+  },
+
+  deleteProjectAction: async (projectId, actionId) => {
+    const { projects } = get()
+    let didDelete = false
+
+    const updatedProjects = projects.map((project) => {
+      if (project.id !== projectId) {
+        return project
+      }
+
+      const nextActions = (project.actions ?? []).filter((action) => action.id !== actionId)
+      didDelete = nextActions.length !== (project.actions ?? []).length
+
+      return {
+        ...project,
+        actions: nextActions,
+        primaryActionId:
+          project.primaryActionId === actionId
+            ? nextActions[0]?.id ?? null
+            : project.primaryActionId,
+      }
+    })
+
+    if (!didDelete) {
+      throw new Error(`Unknown project action: ${projectId}/${actionId}`)
+    }
+
+    const store = await getStore()
+    await store.set(STORE_KEY, updatedProjects)
+    await store.save()
+
+    set({ projects: updatedProjects })
+  },
+
+  setPrimaryAction: async (projectId, actionId) => {
+    const { projects } = get()
+    const updatedProjects = projects.map((project) => {
+      if (project.id !== projectId || !(project.actions ?? []).some((action) => action.id === actionId)) {
+        return project
+      }
+
+      return {
+        ...project,
+        primaryActionId: actionId,
+      }
+    })
 
     const store = await getStore()
     await store.set(STORE_KEY, updatedProjects)
