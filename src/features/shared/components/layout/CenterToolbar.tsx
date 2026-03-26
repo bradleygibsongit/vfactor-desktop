@@ -7,6 +7,7 @@ import { Button } from "@/features/shared/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useProjectStore } from "@/features/workspace/store"
 import { ProjectIcon } from "@/features/workspace/components/ProjectIcon"
+import { ProjectActionsControl } from "@/features/workspace/components/ProjectActionsControl"
 import { useChatStore } from "@/features/chat/store"
 
 interface CenterToolbarProps {
@@ -109,6 +110,7 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
         <div className="drag-region min-w-0 flex-1 self-stretch" />
         {activeView === "chat" ? (
           <div className="hidden shrink-0 items-center gap-2 pr-3 md:flex">
+            <ProjectActionsControl />
             {!showRightSidebar ? <SourceControlActionGroup /> : null}
             <Button
               type="button"

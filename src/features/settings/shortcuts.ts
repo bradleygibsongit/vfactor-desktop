@@ -19,6 +19,7 @@ export interface ShortcutDefinition {
 export type ShortcutPreferences = Partial<Record<ShortcutId, ShortcutBinding>>
 
 const SHORTCUT_MODIFIER_ORDER: ShortcutModifier[] = ["meta", "ctrl", "alt", "shift"]
+const SHORTCUT_MODIFIER_KEYS = new Set(["Meta", "Control", "Alt", "Shift"])
 
 const SHORTCUT_MODIFIER_LABELS: Record<ShortcutModifier, string> = {
   meta: "Cmd",
@@ -63,7 +64,56 @@ export function formatShortcutBinding(binding: ShortcutBinding): string {
     .filter((modifier) => binding.modifiers.includes(modifier))
     .map((modifier) => SHORTCUT_MODIFIER_LABELS[modifier])
 
-  return [...modifierLabels, binding.key.toUpperCase()].join(" ")
+  return [...modifierLabels, normalizeShortcutKey(binding.key)].join(" ")
+}
+
+export function normalizeShortcutKey(key: string): string {
+  if (key === " ") {
+    return "Space"
+  }
+
+  if (key === "Esc") {
+    return "Escape"
+  }
+
+  return key.length === 1 ? key.toUpperCase() : key
+}
+
+export function getShortcutModifiers(
+  event: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
+): ShortcutModifier[] {
+  return SHORTCUT_MODIFIER_ORDER.filter((modifier) => {
+    switch (modifier) {
+      case "meta":
+        return event.metaKey
+      case "ctrl":
+        return event.ctrlKey
+      case "alt":
+        return event.altKey
+      case "shift":
+        return event.shiftKey
+      default:
+        return false
+    }
+  })
+}
+
+export function hasShortcutModifier(binding: ShortcutBinding): boolean {
+  return binding.modifiers.length > 0
+}
+
+export function createShortcutBindingFromKeyboardEvent(
+  event: Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
+): ShortcutBinding | null {
+  if (SHORTCUT_MODIFIER_KEYS.has(event.key)) {
+    return null
+  }
+
+  return {
+    key: normalizeShortcutKey(event.key),
+    code: event.code || undefined,
+    modifiers: getShortcutModifiers(event),
+  }
 }
 
 export function matchesShortcutBinding(
@@ -71,13 +121,13 @@ export function matchesShortcutBinding(
   binding: ShortcutBinding,
 ): boolean {
   const modifierSet = new Set(binding.modifiers)
-  const normalizedKey = event.key.length === 1 ? event.key.toUpperCase() : event.key
+  const normalizedKey = normalizeShortcutKey(event.key)
 
   if (binding.code && event.code !== binding.code) {
     return false
   }
 
-  if (normalizedKey !== binding.key.toUpperCase()) {
+  if (normalizedKey !== normalizeShortcutKey(binding.key)) {
     return false
   }
 

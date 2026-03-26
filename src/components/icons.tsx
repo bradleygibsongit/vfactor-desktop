@@ -202,6 +202,30 @@ export const CloudUpload = forwardRef(function CloudUploadIcon(
 }) as Icon
 CloudUpload.displayName = "CloudUpload"
 
+export const Play = forwardRef(function PlayIcon(
+  { size = 24, strokeWidth = 1.8, ...props }: IconProps,
+  ref: Ref<SVGSVGElement>
+) {
+  return (
+    <svg
+      ref={ref}
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M8 6.75c0-1.17 1.268-1.894 2.271-1.298l7.045 4.182c.972.577.972 1.982 0 2.559l-7.045 4.182C9.268 16.97 8 16.247 8 15.077V6.75Z" />
+    </svg>
+  )
+}) as Icon
+Play.displayName = "Play"
+
 export const GitCommit = forwardRef(function GitCommitIcon(
   { size = 24, strokeWidth = 1.8, ...props }: IconProps,
   ref: Ref<SVGSVGElement>
