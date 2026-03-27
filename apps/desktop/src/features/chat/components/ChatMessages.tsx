@@ -102,6 +102,7 @@ export function ChatMessages({
     approvalStateByMessageId,
     latestTurnFooterMessage,
     latestTurnFooterMessageId,
+    latestTurnStreamingTextMessageId,
     latestTurnChangedFilesSummary,
     completedWorkDurationByMessageId,
     completedFooterByMessageId,
@@ -160,17 +161,6 @@ export function ChatMessages({
 
     return resolved
   }, [completedFooterByMessageId, lastCompletedWork, latestTurnChangedFilesSummary])
-  const latestStreamingTextMessageId = useMemo(
-    () =>
-      [...renderedMessages]
-        .reverse()
-        .find(
-          (message) =>
-            message.info.role === "assistant" &&
-            message.parts.some((part) => part.type === "text" && part.text.trim())
-        )?.info.id ?? null,
-    [renderedMessages]
-  )
   const latestTurnDurationMs =
     latestTurnFooterMessageId == null
       ? null
@@ -241,7 +231,10 @@ export function ChatMessages({
                   message={block.message}
                   childSessions={childSessionData}
                   approvalState={approvalStateByMessageId.get(block.message.info.id) ?? null}
-                  isStreaming={status === "streaming" && block.message.info.id === latestStreamingTextMessageId}
+                  isStreaming={
+                    status === "streaming" &&
+                    block.message.info.id === latestTurnStreamingTextMessageId
+                  }
                 />
                 {shouldRenderInlineCompletedFooter ? (
                   <AssistantTurnFooter

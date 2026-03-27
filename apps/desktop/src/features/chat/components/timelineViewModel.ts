@@ -26,6 +26,7 @@ export interface ChatTimelineViewModel {
   approvalStateByMessageId: Map<string, RuntimeApprovalDisplayState>
   latestTurnFooterMessage: MessageWithParts | null
   latestTurnFooterMessageId: string | null
+  latestTurnStreamingTextMessageId: string | null
   latestTurnChangedFilesSummary: TimelineFileChangeSummary | null
   completedWorkDurationByMessageId: Map<string, number>
   completedFooterByMessageId: Map<
@@ -224,6 +225,14 @@ export function buildChatTimelineViewModel({
   const latestTurnFooterMessage =
     [...latestTurnMessages].reverse().find((message) => message.info.role === "assistant") ?? null
   const latestTurnFooterMessageId = latestTurnFooterMessage?.info.id ?? null
+  const latestTurnStreamingTextMessageId =
+    [...latestTurnMessages]
+      .reverse()
+      .find(
+        (message) =>
+          message.info.role === "assistant" &&
+          message.parts.some((part) => part.type === "text" && part.text.trim())
+      )?.info.id ?? null
   const changeTotals = new Map<string, { added: number; removed: number }>()
   for (const candidate of latestTurnMessages) {
     if (candidate.info.itemType !== "fileChange") {
@@ -397,6 +406,7 @@ export function buildChatTimelineViewModel({
     ),
     latestTurnFooterMessage,
     latestTurnFooterMessageId,
+    latestTurnStreamingTextMessageId,
     latestTurnChangedFilesSummary,
     completedWorkDurationByMessageId,
     completedFooterByMessageId,
