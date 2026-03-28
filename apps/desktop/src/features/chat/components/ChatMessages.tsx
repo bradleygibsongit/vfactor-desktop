@@ -79,13 +79,24 @@ function hasRenderableMessageContent(message: MessageWithParts): boolean {
   )
 }
 
+function dedupeMessagesByLastId(messages: MessageWithParts[]): MessageWithParts[] {
+  const lastIndexById = new Map<string, number>()
+
+  messages.forEach((message, index) => {
+    lastIndexById.set(message.info.id, index)
+  })
+
+  return messages.filter((message, index) => lastIndexById.get(message.info.id) === index)
+}
+
 function getTurnCollapsedMessagesByFooterId(
   messages: MessageWithParts[],
   status: "idle" | "streaming" | "error"
 ): Map<string, MessageWithParts[]> {
   const collapsedMessagesByFooterId = new Map<string, MessageWithParts[]>()
+  const dedupedMessages = dedupeMessagesByLastId(messages)
 
-  if (messages.length === 0) {
+  if (dedupedMessages.length === 0) {
     return collapsedMessagesByFooterId
   }
 
@@ -96,13 +107,13 @@ function getTurnCollapsedMessagesByFooterId(
       return
     }
 
-    const turnMessages = messages.slice(turnStartIndex, turnEndIndex + 1)
+    const turnMessages = dedupedMessages.slice(turnStartIndex, turnEndIndex + 1)
     const footerMessage = [...turnMessages].reverse().find((message) => message.info.role === "assistant")
     if (!footerMessage || !getMessageText(footerMessage).trim()) {
       return
     }
 
-    if (status === "streaming" && turnEndIndex === messages.length - 1) {
+    if (status === "streaming" && turnEndIndex === dedupedMessages.length - 1) {
       return
     }
 
@@ -120,8 +131,8 @@ function getTurnCollapsedMessagesByFooterId(
     collapsedMessagesByFooterId.set(footerMessage.info.id, collapsedMessages)
   }
 
-  for (let index = 0; index < messages.length; index++) {
-    if (messages[index]?.info.role !== "user") {
+  for (let index = 0; index < dedupedMessages.length; index++) {
+    if (dedupedMessages[index]?.info.role !== "user") {
       continue
     }
 
@@ -129,7 +140,7 @@ function getTurnCollapsedMessagesByFooterId(
     turnStartIndex = index + 1
   }
 
-  processTurn(messages.length - 1)
+  processTurn(dedupedMessages.length - 1)
 
   return collapsedMessagesByFooterId
 }
