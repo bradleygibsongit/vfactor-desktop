@@ -249,8 +249,9 @@ export function waitForCodexTurnCompletion(
           turnState.upsert(item)
         }
 
+        emitUpdate()
+
         if (turn.status !== "inProgress") {
-          emitUpdate()
           finish(turn)
         }
       } catch (error) {

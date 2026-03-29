@@ -13,6 +13,11 @@ export function useViewportAnchorToggle() {
         return
       }
 
+      if (stickToBottom.isAtBottom) {
+        toggle()
+        return
+      }
+
       const scrollTopBefore = scrollElement.scrollTop
 
       if (settleFrameRef.current != null) {
