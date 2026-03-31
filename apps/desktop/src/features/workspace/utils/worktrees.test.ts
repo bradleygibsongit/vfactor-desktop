@@ -41,6 +41,18 @@ describe("worktree utils", () => {
     expect(managedWorktreePath).toBe("/tmp/.nucleus-worktrees/repo-project-123/kolkata")
   })
 
+  test("builds managed worktree paths correctly for Windows repo roots", () => {
+    const managedWorktreePath = buildManagedWorktreePath(
+      {
+        id: "project-123",
+        repoRootPath: "C:\\repo",
+      },
+      "kolkata"
+    )
+
+    expect(managedWorktreePath).toBe("C:\\.nucleus-worktrees\\repo-project-123\\kolkata")
+  })
+
   test("resolves the default workspaces path from the repo root", () => {
     expect(
       getDefaultProjectWorkspacesPath({
@@ -62,6 +74,10 @@ describe("worktree utils", () => {
 
   test("normalizes empty custom workspaces paths to null", () => {
     expect(normalizeProjectWorkspacesPath("   ")).toBeNull()
+  })
+
+  test("normalizes Windows custom workspaces paths without mangling separators", () => {
+    expect(normalizeProjectWorkspacesPath("C:\\workspaces\\repo\\\\")).toBe("C:\\workspaces\\repo")
   })
 
   test("falls back to the first ready worktree when the stored root is hidden", () => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
+import { pathToFileURL } from "node:url"
 import { CaretDown, Copy, GitBranch, Image, X } from "@/components/icons"
 import { desktop } from "@/desktop/client"
 import {
@@ -37,7 +38,7 @@ interface ProjectSettingsModalProps {
 }
 
 function toFileUrl(filePath: string): string {
-  return `file://${encodeURI(filePath)}`
+  return pathToFileURL(filePath).toString()
 }
 
 export function ProjectSettingsModal({

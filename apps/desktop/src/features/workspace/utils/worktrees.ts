@@ -1,3 +1,4 @@
+import { posix as pathPosix, win32 as pathWin32 } from "node:path"
 import type { GitWorktreeSummary } from "@/desktop/contracts"
 import type { Project, ProjectWorktree } from "../types"
 
@@ -24,30 +25,48 @@ const WORKTREE_NAME_POOL = [
   "Oaxaca",
 ]
 
+function usesWindowsSeparators(filePath: string): boolean {
+  return /\\/.test(filePath) || /^[A-Za-z]:[\\/]/.test(filePath)
+}
+
+function getPathModule(filePath: string) {
+  return usesWindowsSeparators(filePath) ? pathWin32 : pathPosix
+}
+
+function trimTrailingSeparators(filePath: string): string {
+  const trimmed = filePath.trim()
+  if (!trimmed) {
+    return trimmed
+  }
+
+  const pathModule = getPathModule(trimmed)
+  const withoutTrailingSeparators = trimmed.replace(/[\\/]+$/, "")
+  return withoutTrailingSeparators || pathModule.parse(trimmed).root || pathModule.sep
+}
+
 function getDirname(filePath: string): string {
-  const normalized = filePath.replace(/\/+$/, "")
-  const lastSlashIndex = normalized.lastIndexOf("/")
-  return lastSlashIndex <= 0 ? "/" : normalized.slice(0, lastSlashIndex)
+  const normalized = trimTrailingSeparators(filePath)
+  return getPathModule(normalized).dirname(normalized)
 }
 
 function getBasename(filePath: string): string {
-  const normalized = filePath.replace(/\/+$/, "")
-  const lastSlashIndex = normalized.lastIndexOf("/")
-  return lastSlashIndex < 0 ? normalized : normalized.slice(lastSlashIndex + 1)
+  const normalized = trimTrailingSeparators(filePath)
+  return getPathModule(normalized).basename(normalized)
 }
 
 function normalizePath(filePath: string): string {
-  const normalized = filePath.trim().replace(/\/+$/, "")
-  return normalized || "/"
+  const normalized = trimTrailingSeparators(filePath)
+  return normalized || pathPosix.sep
 }
 
 function isSamePathOrAncestor(candidatePath: string, targetPath: string): boolean {
   const normalizedCandidatePath = normalizePath(candidatePath)
   const normalizedTargetPath = normalizePath(targetPath)
+  const pathModule = getPathModule(`${candidatePath}${targetPath}`)
 
   return (
     normalizedCandidatePath === normalizedTargetPath ||
-    normalizedTargetPath.startsWith(`${normalizedCandidatePath}/`)
+    normalizedTargetPath.startsWith(`${normalizedCandidatePath}${pathModule.sep}`)
   )
 }
 
@@ -67,18 +86,20 @@ function createCandidateName(baseName: string, suffix: number): string {
 
 export function buildManagedWorktreePath(project: Pick<Project, "id" | "repoRootPath">, slug: string): string {
   const repoRootPath = project.repoRootPath || ""
+  const pathModule = getPathModule(repoRootPath)
   const repoParentPath = getDirname(repoRootPath)
   const repoName = getBasename(repoRootPath)
-  return `${repoParentPath}/.nucleus-worktrees/${repoName}-${project.id}/${slug}`
+  return pathModule.join(repoParentPath, ".nucleus-worktrees", `${repoName}-${project.id}`, slug)
 }
 
 export function getDefaultProjectWorkspacesPath(
   project: Pick<Project, "id" | "repoRootPath">
 ): string {
   const repoRootPath = project.repoRootPath || ""
+  const pathModule = getPathModule(repoRootPath)
   const repoParentPath = getDirname(repoRootPath)
   const repoName = getBasename(repoRootPath)
-  return `${repoParentPath}/.nucleus-worktrees/${repoName}-${project.id}`
+  return pathModule.join(repoParentPath, ".nucleus-worktrees", `${repoName}-${project.id}`)
 }
 
 export function getProjectWorkspacesPath(
@@ -91,7 +112,7 @@ export function getProjectWorkspacesPath(
 export function normalizeProjectWorkspacesPath(
   workspacesPath: string | null | undefined
 ): string | null {
-  const normalized = workspacesPath?.trim().replace(/\/+$/, "")
+  const normalized = workspacesPath?.trim().replace(/[\\/]+$/, "")
   return normalized || null
 }
 
@@ -166,6 +187,7 @@ export function getActiveWorktree(
 export function generateManagedWorktreeIdentity(
   project: Pick<Project, "id" | "repoRootPath" | "workspacesPath" | "worktrees">
 ): { name: string; slug: string; branchName: string; path: string } {
+  const pathModule = getPathModule(project.workspacesPath || project.repoRootPath)
   const usedNames = new Set(project.worktrees.map((worktree) => worktree.name.toLowerCase()))
   const usedSlugs = new Set(project.worktrees.map((worktree) => createSlug(worktree.branchName)))
 
@@ -188,6 +210,6 @@ export function generateManagedWorktreeIdentity(
     name,
     slug,
     branchName: slug,
-    path: `${getProjectWorkspacesPath(project)}/${slug}`,
+    path: pathModule.join(getProjectWorkspacesPath(project), slug),
   }
 }
