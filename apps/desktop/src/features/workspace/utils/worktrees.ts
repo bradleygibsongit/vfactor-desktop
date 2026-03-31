@@ -1,0 +1,215 @@
+import { posix as pathPosix, win32 as pathWin32 } from "node:path"
+import type { GitWorktreeSummary } from "@/desktop/contracts"
+import type { Project, ProjectWorktree } from "../types"
+
+const WORKTREE_NAME_POOL = [
+  "Kolkata",
+  "Valencia",
+  "Oslo",
+  "Kyoto",
+  "Lima",
+  "Nairobi",
+  "Lisbon",
+  "Seoul",
+  "Dakar",
+  "Hobart",
+  "Accra",
+  "Bergen",
+  "Cusco",
+  "Naples",
+  "Tbilisi",
+  "Jaipur",
+  "Split",
+  "Recife",
+  "Tallinn",
+  "Oaxaca",
+]
+
+function usesWindowsSeparators(filePath: string): boolean {
+  return /\\/.test(filePath) || /^[A-Za-z]:[\\/]/.test(filePath)
+}
+
+function getPathModule(filePath: string) {
+  return usesWindowsSeparators(filePath) ? pathWin32 : pathPosix
+}
+
+function trimTrailingSeparators(filePath: string): string {
+  const trimmed = filePath.trim()
+  if (!trimmed) {
+    return trimmed
+  }
+
+  const pathModule = getPathModule(trimmed)
+  const withoutTrailingSeparators = trimmed.replace(/[\\/]+$/, "")
+  return withoutTrailingSeparators || pathModule.parse(trimmed).root || pathModule.sep
+}
+
+function getDirname(filePath: string): string {
+  const normalized = trimTrailingSeparators(filePath)
+  return getPathModule(normalized).dirname(normalized)
+}
+
+function getBasename(filePath: string): string {
+  const normalized = trimTrailingSeparators(filePath)
+  return getPathModule(normalized).basename(normalized)
+}
+
+function normalizePath(filePath: string): string {
+  const normalized = trimTrailingSeparators(filePath)
+  return normalized || pathPosix.sep
+}
+
+function isSamePathOrAncestor(candidatePath: string, targetPath: string): boolean {
+  const normalizedCandidatePath = normalizePath(candidatePath)
+  const normalizedTargetPath = normalizePath(targetPath)
+  const pathModule = getPathModule(`${candidatePath}${targetPath}`)
+
+  return (
+    normalizedCandidatePath === normalizedTargetPath ||
+    normalizedTargetPath.startsWith(`${normalizedCandidatePath}${pathModule.sep}`)
+  )
+}
+
+export function createSlug(value: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+
+  return slug || "worktree"
+}
+
+function createCandidateName(baseName: string, suffix: number): string {
+  return suffix <= 1 ? baseName : `${baseName} ${suffix}`
+}
+
+export function buildManagedWorktreePath(project: Pick<Project, "id" | "repoRootPath">, slug: string): string {
+  const repoRootPath = project.repoRootPath || ""
+  const pathModule = getPathModule(repoRootPath)
+  const repoParentPath = getDirname(repoRootPath)
+  const repoName = getBasename(repoRootPath)
+  return pathModule.join(repoParentPath, ".nucleus-worktrees", `${repoName}-${project.id}`, slug)
+}
+
+export function getDefaultProjectWorkspacesPath(
+  project: Pick<Project, "id" | "repoRootPath">
+): string {
+  const repoRootPath = project.repoRootPath || ""
+  const pathModule = getPathModule(repoRootPath)
+  const repoParentPath = getDirname(repoRootPath)
+  const repoName = getBasename(repoRootPath)
+  return pathModule.join(repoParentPath, ".nucleus-worktrees", `${repoName}-${project.id}`)
+}
+
+export function getProjectWorkspacesPath(
+  project: Pick<Project, "id" | "repoRootPath" | "workspacesPath">
+): string {
+  const customPath = project.workspacesPath?.trim().replace(/\/+$/, "")
+  return customPath || getDefaultProjectWorkspacesPath(project)
+}
+
+export function normalizeProjectWorkspacesPath(
+  workspacesPath: string | null | undefined
+): string | null {
+  const normalized = workspacesPath?.trim().replace(/[\\/]+$/, "")
+  return normalized || null
+}
+
+export function resolveRepoRootPath(
+  projectPath: string,
+  discoveredWorktrees: Pick<GitWorktreeSummary, "path" | "isMain">[]
+): string {
+  const normalizedProjectPath = normalizePath(projectPath)
+  const mainWorktreePath = discoveredWorktrees.find((worktree) => worktree.isMain)?.path
+  if (mainWorktreePath) {
+    return normalizePath(mainWorktreePath)
+  }
+
+  const matchingAncestorPaths = discoveredWorktrees
+    .map((worktree) => normalizePath(worktree.path))
+    .filter((worktreePath) => isSamePathOrAncestor(worktreePath, normalizedProjectPath))
+    .sort((left, right) => left.length - right.length)
+
+  return matchingAncestorPaths[0] ?? normalizedProjectPath
+}
+
+export function isWorktreeReady(
+  worktree: Pick<ProjectWorktree, "status"> | null | undefined
+): worktree is Pick<ProjectWorktree, "status"> & { status: "ready" } {
+  return worktree?.status === "ready"
+}
+
+export function getSelectedWorktree(
+  project: Pick<Project, "selectedWorktreeId" | "rootWorktreeId" | "worktrees"> | null | undefined
+): ProjectWorktree | null {
+  if (!project) {
+    return null
+  }
+
+  return (
+    project.worktrees.find((worktree) => worktree.id === project.selectedWorktreeId) ??
+    project.worktrees.find((worktree) => worktree.id === project.rootWorktreeId) ??
+    project.worktrees.find((worktree) => worktree.status === "ready") ??
+    project.worktrees[0] ??
+    null
+  )
+}
+
+export function getWorktreeById(
+  project: Pick<Project, "worktrees"> | null | undefined,
+  worktreeId: string | null | undefined
+): ProjectWorktree | null {
+  if (!project || !worktreeId) {
+    return null
+  }
+
+  return project.worktrees.find((worktree) => worktree.id === worktreeId) ?? null
+}
+
+export function getActiveWorktree(
+  project: Pick<Project, "selectedWorktreeId" | "rootWorktreeId" | "worktrees"> | null | undefined,
+  activeWorktreeId: string | null | undefined
+): ProjectWorktree | null {
+  const activeWorktree = getWorktreeById(project, activeWorktreeId)
+  if (isWorktreeReady(activeWorktree)) {
+    return activeWorktree
+  }
+
+  const selectedWorktree = getSelectedWorktree(project)
+  if (isWorktreeReady(selectedWorktree)) {
+    return selectedWorktree
+  }
+
+  return project?.worktrees.find((worktree) => isWorktreeReady(worktree)) ?? null
+}
+
+export function generateManagedWorktreeIdentity(
+  project: Pick<Project, "id" | "repoRootPath" | "workspacesPath" | "worktrees">
+): { name: string; slug: string; branchName: string; path: string } {
+  const pathModule = getPathModule(project.workspacesPath || project.repoRootPath)
+  const usedNames = new Set(project.worktrees.map((worktree) => worktree.name.toLowerCase()))
+  const usedSlugs = new Set(project.worktrees.map((worktree) => createSlug(worktree.branchName)))
+
+  let baseName = WORKTREE_NAME_POOL[Math.floor(Math.random() * WORKTREE_NAME_POOL.length)] ?? "Kolkata"
+  if (usedNames.has(baseName.toLowerCase())) {
+    baseName = WORKTREE_NAME_POOL.find((candidate) => !usedNames.has(candidate.toLowerCase())) ?? baseName
+  }
+
+  let suffix = 1
+  let name = createCandidateName(baseName, suffix)
+  let slug = createSlug(name)
+
+  while (usedNames.has(name.toLowerCase()) || usedSlugs.has(slug)) {
+    suffix += 1
+    name = createCandidateName(baseName, suffix)
+    slug = createSlug(name)
+  }
+
+  return {
+    name,
+    slug,
+    branchName: slug,
+    path: pathModule.join(getProjectWorkspacesPath(project), slug),
+  }
+}

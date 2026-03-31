@@ -5,13 +5,19 @@ import type {
   DesktopDirEntry,
   GitActionProgressEvent,
   GitBranchesResponse,
+  GitCreateWorktreeInput,
+  GitCreateWorktreeResult,
   GitFileChange,
   GitFileDiff,
   GitPullResult,
+  GitRemoveWorktreeInput,
+  GitRemoveWorktreeResult,
   GitRunStackedActionInput,
   GitRunStackedActionResult,
+  GitWorktreeSummary,
   ProjectFileSystemEvent,
   SkillsSyncResponse,
+  TerminalCreateSessionEnvironment,
   TerminalDataEvent,
   TerminalExitEvent,
   TerminalStartResponse,
@@ -100,8 +106,9 @@ export const desktop = {
       cwd: string,
       cols: number,
       rows: number,
-      initialCommand?: string
-    ) => window.nucleus.terminal.createSession(sessionId, cwd, cols, rows, initialCommand),
+      initialCommand?: string,
+      environment?: TerminalCreateSessionEnvironment
+    ) => window.nucleus.terminal.createSession(sessionId, cwd, cols, rows, initialCommand, environment),
     write: (sessionId: string, data: string) => window.nucleus.terminal.write(sessionId, data),
     resize: (sessionId: string, cols: number, rows: number) =>
       window.nucleus.terminal.resize(sessionId, cols, rows),
@@ -114,6 +121,11 @@ export const desktop = {
   git: {
     getBranches: (projectPath: string) => window.nucleus.git.getBranches(projectPath),
     getChanges: (projectPath: string) => window.nucleus.git.getChanges(projectPath),
+    listWorktrees: (projectPath: string) => window.nucleus.git.listWorktrees(projectPath),
+    createWorktree: (projectPath: string, input: GitCreateWorktreeInput) =>
+      window.nucleus.git.createWorktree(projectPath, input),
+    removeWorktree: (projectPath: string, input: GitRemoveWorktreeInput) =>
+      window.nucleus.git.removeWorktree(projectPath, input),
     getFileDiff: (projectPath: string, filePath: string, previousPath?: string | null) =>
       window.nucleus.git.getFileDiff(projectPath, filePath, previousPath),
     checkoutBranch: (projectPath: string, branchName: string) =>
@@ -137,13 +149,19 @@ export type {
   DesktopDirEntry,
   GitActionProgressEvent,
   GitBranchesResponse,
+  GitCreateWorktreeInput,
+  GitCreateWorktreeResult,
   GitFileChange,
   GitFileDiff,
   GitPullResult,
+  GitRemoveWorktreeInput,
+  GitRemoveWorktreeResult,
   GitRunStackedActionInput,
   GitRunStackedActionResult,
+  GitWorktreeSummary,
   ProjectFileSystemEvent,
   SkillsSyncResponse,
+  TerminalCreateSessionEnvironment,
   TerminalDataEvent,
   TerminalExitEvent,
   TerminalStartResponse,

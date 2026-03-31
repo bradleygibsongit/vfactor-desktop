@@ -11,7 +11,6 @@ import {
   InformationCircle,
   Refresh,
 } from "@/components/icons"
-import { useChatProjectState } from "@/features/chat/hooks/useChat"
 import { normalizeGitGenerationModel, useSettingsStore } from "@/features/settings/store/settingsStore"
 import {
   AlertDialog,
@@ -41,6 +40,7 @@ import {
   resolveQuickAction,
   summarizeGitResult,
 } from "./gitActionsLogic"
+import { useCurrentProjectWorktree } from "@/features/shared/hooks"
 
 interface SourceControlActionGroupProps {
   className?: string
@@ -84,8 +84,8 @@ export function SourceControlActionGroup({
   className,
   projectPath,
 }: SourceControlActionGroupProps) {
-  const { selectedProject } = useChatProjectState()
-  const resolvedProjectPath = projectPath ?? selectedProject?.path ?? null
+  const { selectedProject, selectedWorktreePath } = useCurrentProjectWorktree()
+  const resolvedProjectPath = projectPath ?? selectedWorktreePath ?? null
   const gitGenerationModel = useSettingsStore((state) => state.gitGenerationModel)
   const initializeSettings = useSettingsStore((state) => state.initialize)
   const { branchData, isLoading: isBranchLoading, loadError: branchLoadError, refresh: refreshBranches } =
@@ -115,13 +115,25 @@ export function SourceControlActionGroup({
   const hasChanges = changes.length > 0
   const isBusy = isSubmitting || isBranchLoading || isChangesLoading
   const branchStatus = branchData
+  const preferredRemoteName = selectedProject?.remoteName ?? null
+  const effectiveRemoteName = useMemo(() => {
+    if (preferredRemoteName?.trim()) {
+      return preferredRemoteName.trim()
+    }
+
+    if (branchStatus?.hasOriginRemote) {
+      return "origin"
+    }
+
+    return branchStatus?.remoteNames[0] ?? null
+  }, [branchStatus, preferredRemoteName])
   const quickAction = useMemo(
-    () => resolveQuickAction(branchStatus, hasChanges, isBusy),
-    [branchStatus, hasChanges, isBusy]
+    () => resolveQuickAction(branchStatus, hasChanges, isBusy, effectiveRemoteName),
+    [branchStatus, effectiveRemoteName, hasChanges, isBusy]
   )
   const menuItems = useMemo(
-    () => buildMenuItems(branchStatus, hasChanges, isBusy),
-    [branchStatus, hasChanges, isBusy]
+    () => buildMenuItems(branchStatus, hasChanges, isBusy, effectiveRemoteName),
+    [branchStatus, effectiveRemoteName, hasChanges, isBusy]
   )
   const actionError = branchLoadError ?? changesLoadError
   const actionHint = actionError || quickAction.hint || null
@@ -183,6 +195,7 @@ export function SourceControlActionGroup({
         ...(options?.commitMessage ? { commitMessage: options.commitMessage } : {}),
         ...(options?.filePaths ? { filePaths: options.filePaths } : {}),
         ...(options?.featureBranch ? { featureBranch: true } : {}),
+        ...(effectiveRemoteName ? { remoteName: effectiveRemoteName } : {}),
         ...(gitGenerationModel.trim()
           ? { generationModel: normalizeGitGenerationModel(gitGenerationModel) }
           : {}),

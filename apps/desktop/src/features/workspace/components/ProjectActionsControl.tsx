@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { desktop } from "@/desktop/client"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { CaretDown, PencilSimple, Plus } from "@/components/icons"
 import {
   formatShortcutBinding,
@@ -14,8 +13,9 @@ import {
   DropdownMenuTrigger,
 } from "@/features/shared/components/ui/dropdown-menu"
 import { useRightSidebar } from "@/features/shared/components/layout/useRightSidebar"
+import { useCurrentProjectWorktree } from "@/features/shared/hooks"
 import { Button } from "@/features/shared/components/ui/button"
-import { useTerminalStore } from "@/features/terminal/store/terminalStore"
+import { runCommandInProjectTerminal } from "@/features/terminal/utils/projectTerminal"
 import { useProjectStore } from "@/features/workspace/store"
 import type { ProjectAction } from "@/features/workspace/types"
 import {
@@ -26,15 +26,11 @@ import { ProjectActionIcon } from "@/features/workspace/components/ProjectAction
 import { AddProjectActionModal } from "@/features/workspace/components/modals/AddProjectActionModal"
 import { cn } from "@/lib/utils"
 
-const ACTION_TERMINAL_COLS = 120
-const ACTION_TERMINAL_ROWS = 32
-
 export function ProjectActionsControl() {
-  const { projects, selectedProjectId, setPrimaryAction } = useProjectStore()
-  const getOrCreateActiveTabId = useTerminalStore((state) => state.getOrCreateActiveTabId)
-  const selectTerminal = useTerminalStore((state) => state.selectTerminal)
-  const setProjectCollapsed = useTerminalStore((state) => state.setProjectCollapsed)
+  const { setPrimaryAction } = useProjectStore()
   const { expand } = useRightSidebar()
+  const { selectedProject, selectedWorktreeId, selectedWorktreePath } =
+    useCurrentProjectWorktree()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [runningActionId, setRunningActionId] = useState<string | null>(null)
@@ -42,10 +38,6 @@ export function ProjectActionsControl() {
   const actionGroupRef = useRef<HTMLDivElement | null>(null)
   const actionMenuRef = useRef<HTMLDivElement | null>(null)
 
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId],
-  )
   const actions = selectedProject?.actions ?? []
   const primaryAction = getPrimaryProjectAction(selectedProject)
 
@@ -53,29 +45,25 @@ export function ProjectActionsControl() {
     if (!selectedProject) {
       return
     }
+    if (!selectedWorktreeId || !selectedWorktreePath) {
+      return
+    }
 
     setRunningActionId(action.id)
     expand()
-    setProjectCollapsed(selectedProject.id, false)
 
     try {
-      const tabId = getOrCreateActiveTabId(selectedProject.id)
-      const sessionId = `project-terminal:${tabId}`
       const commandLines = getProjectActionCommands(action.command)
 
       if (commandLines.length === 0) {
         return
       }
 
-      selectTerminal(selectedProject.id, tabId)
-
-      await desktop.terminal.createSession(
-        sessionId,
-        selectedProject.path,
-        ACTION_TERMINAL_COLS,
-        ACTION_TERMINAL_ROWS,
-      )
-      await desktop.terminal.write(sessionId, `${commandLines.join("\n")}\n`)
+      await runCommandInProjectTerminal({
+        projectId: selectedWorktreeId,
+        cwd: selectedWorktreePath,
+        command: commandLines.join("\n"),
+      })
 
       if (promote && selectedProject.primaryActionId !== action.id) {
         await setPrimaryAction(selectedProject.id, action.id)
@@ -85,7 +73,7 @@ export function ProjectActionsControl() {
     } finally {
       setRunningActionId((current) => (current === action.id ? null : current))
     }
-  }, [expand, getOrCreateActiveTabId, selectTerminal, selectedProject, setPrimaryAction, setProjectCollapsed])
+  }, [expand, selectedProject, selectedWorktreeId, selectedWorktreePath, setPrimaryAction])
 
   useEffect(() => {
     if (!selectedProject || actions.length === 0 || isModalOpen) {

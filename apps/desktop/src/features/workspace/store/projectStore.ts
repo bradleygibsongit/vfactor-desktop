@@ -1,27 +1,54 @@
 import { create } from "zustand"
-import { desktop, loadDesktopStore, type DesktopStoreHandle } from "@/desktop/client"
-import type { Project, ProjectAction } from "../types"
+import {
+  desktop,
+  loadDesktopStore,
+  type DesktopStoreHandle,
+  type GitBranchesResponse,
+  type GitWorktreeSummary,
+} from "@/desktop/client"
+import type { Project, ProjectAction, ProjectWorktree } from "../types"
 import { normalizeProjectIconPath } from "../utils/projectIcon"
 import { normalizeProjectActionIconName } from "../utils/projectActionIcons"
+import {
+  getActiveWorktree,
+  generateManagedWorktreeIdentity,
+  isWorktreeReady,
+  normalizeProjectWorkspacesPath,
+  resolveRepoRootPath,
+} from "../utils/worktrees"
 
 const STORE_FILE = "projects.json"
 const STORE_KEY = "projects"
 const DEFAULT_LOCATION_KEY = "defaultLocation"
 const SELECTED_PROJECT_KEY = "selectedProjectId"
+const ACTIVE_WORKTREE_KEY = "activeWorktreeId"
+
+type LegacyProject = Partial<Project> & {
+  id: string
+  name: string
+  path: string
+  addedAt?: number
+}
 
 interface ProjectState {
   projects: Project[]
-  selectedProjectId: string | null
+  focusedProjectId: string | null
+  activeWorktreeId: string | null
   defaultLocation: string
   isLoading: boolean
-
-  // Actions
   loadProjects: () => Promise<void>
   addProject: (path: string, name?: string) => Promise<void>
   removeProject: (id: string) => Promise<void>
   setProjectOrder: (projects: Project[]) => Promise<void>
   selectProject: (id: string) => Promise<void>
-  updateProject: (id: string, updates: Partial<Pick<Project, "name" | "iconPath">>) => Promise<void>
+  selectWorktree: (projectId: string, worktreeId: string) => Promise<void>
+  createWorktree: (projectId: string) => Promise<ProjectWorktree>
+  removeWorktree: (projectId: string, worktreeId: string) => Promise<void>
+  updateProject: (
+    id: string,
+    updates: Partial<Pick<Project, "name" | "iconPath" | "workspacesPath" | "remoteName" | "setupScript">>
+  ) => Promise<void>
+  setTargetBranch: (projectId: string, branchName: string | null) => Promise<void>
   addProjectAction: (
     projectId: string,
     action: Omit<ProjectAction, "id" | "createdAt">
@@ -45,8 +72,62 @@ async function getStore(): Promise<DesktopStoreHandle> {
   return storeInstance
 }
 
-function hydrateProject(project: Project): Project {
-      const actions = Array.isArray(project.actions)
+function normalizeWorktree(
+  worktree: Partial<ProjectWorktree>,
+  fallback: {
+    id: string
+    name: string
+    branchName: string
+    path: string
+    source: ProjectWorktree["source"]
+    createdAt: number
+  }
+): ProjectWorktree {
+  return {
+    id: worktree.id ?? fallback.id,
+    name: worktree.name?.trim() || fallback.name,
+    branchName: worktree.branchName?.trim() || fallback.branchName,
+    path: worktree.path?.trim() || fallback.path,
+    source: worktree.source ?? fallback.source,
+    status: worktree.status ?? "ready",
+    createdAt: worktree.createdAt ?? fallback.createdAt,
+    updatedAt: worktree.updatedAt ?? Date.now(),
+  }
+}
+
+function sortWorktrees(worktrees: ProjectWorktree[]): ProjectWorktree[] {
+  return [...worktrees].sort((a, b) => {
+    if (a.source === "root" && b.source !== "root") {
+      return -1
+    }
+    if (a.source !== "root" && b.source === "root") {
+      return 1
+    }
+    return b.updatedAt - a.updatedAt
+  })
+}
+
+function normalizeComparablePath(filePath: string | null | undefined): string {
+  return filePath?.trim().replace(/\/+$/, "") ?? ""
+}
+
+function normalizeProjectRemoteName(remoteName: string | null | undefined): string | null {
+  const normalized = remoteName?.trim()
+  return normalized || null
+}
+
+export function normalizeProjectSetupScript(setupScript: string | null | undefined): string | null {
+  const normalized = setupScript?.trim()
+  return normalized || null
+}
+
+function hydrateProjectActions(
+  project: LegacyProject
+): Pick<
+  Project,
+  "actions" | "primaryActionId" | "iconPath" | "workspacesPath" | "remoteName" | "setupScript"
+> {
+  const actions = Array.isArray(project.actions)
     ? project.actions.map((action) => ({
         ...action,
         iconName: normalizeProjectActionIconName(action.iconName),
@@ -54,33 +135,256 @@ function hydrateProject(project: Project): Project {
         hotkey: action.hotkey ?? null,
       }))
     : []
+
   const primaryActionId =
     project.primaryActionId && actions.some((action) => action.id === project.primaryActionId)
       ? project.primaryActionId
       : actions[0]?.id ?? null
 
   return {
-    ...project,
     iconPath: normalizeProjectIconPath(project.iconPath),
+    workspacesPath: normalizeProjectWorkspacesPath(project.workspacesPath),
+    remoteName: normalizeProjectRemoteName(project.remoteName),
+    setupScript: normalizeProjectSetupScript(project.setupScript),
     actions,
     primaryActionId,
   }
 }
 
+async function getGitMetadata(projectPath: string): Promise<{
+  branchData: GitBranchesResponse | null
+  worktrees: GitWorktreeSummary[]
+}> {
+  try {
+    const [branchData, worktrees] = await Promise.all([
+      desktop.git.getBranches(projectPath).catch(() => null),
+      desktop.git.listWorktrees(projectPath).catch(() => []),
+    ])
+
+    return { branchData, worktrees }
+  } catch {
+    return { branchData: null, worktrees: [] }
+  }
+}
+
+async function hydrateProject(project: LegacyProject): Promise<Project> {
+  const now = Date.now()
+  const { iconPath, actions, primaryActionId, workspacesPath, remoteName, setupScript } =
+    hydrateProjectActions(project)
+  const { branchData, worktrees: discoveredWorktrees } = await getGitMetadata(project.path)
+  const repoRootPath = project.repoRootPath?.trim() || resolveRepoRootPath(project.path, discoveredWorktrees)
+  const existingWorktrees = Array.isArray(project.worktrees) ? project.worktrees : []
+  const hiddenWorktreePaths = Array.isArray(project.hiddenWorktreePaths)
+    ? project.hiddenWorktreePaths.filter((candidate): candidate is string => Boolean(candidate?.trim()))
+    : []
+  const hiddenWorktreePathSet = new Set(hiddenWorktreePaths)
+  const isRepoRootHidden = hiddenWorktreePathSet.has(repoRootPath)
+  const existingRoot =
+    existingWorktrees.find((worktree) => worktree.source === "root") ??
+    existingWorktrees.find((worktree) => worktree.path === repoRootPath)
+  const rootDiscovered = discoveredWorktrees.find((worktree) => worktree.path === repoRootPath)
+  const rootWorktreeIdCandidate = project.rootWorktreeId ?? existingRoot?.id ?? crypto.randomUUID()
+  const rootWorktree = normalizeWorktree(existingRoot ?? {}, {
+    id: rootWorktreeIdCandidate,
+    name: existingRoot?.name?.trim() || "Root",
+    branchName:
+      existingRoot?.branchName?.trim() ||
+      rootDiscovered?.branchName?.trim() ||
+      branchData?.currentBranch?.trim() ||
+      "No branch",
+    path: repoRootPath,
+    source: "root",
+    createdAt: existingRoot?.createdAt ?? project.addedAt ?? now,
+  })
+
+  const existingByPath = new Map(existingWorktrees.map((worktree) => [worktree.path, worktree]))
+  const nextWorktrees = new Map<string, ProjectWorktree>()
+
+  if (!isRepoRootHidden) {
+    nextWorktrees.set(rootWorktree.id, rootWorktree)
+  }
+
+  for (const worktree of discoveredWorktrees) {
+    if (hiddenWorktreePathSet.has(worktree.path)) {
+      continue
+    }
+
+    if (worktree.path === repoRootPath) {
+      continue
+    }
+
+    const existing = existingByPath.get(worktree.path)
+    const nextWorktree = normalizeWorktree(existing ?? {}, {
+      id: existing?.id ?? crypto.randomUUID(),
+      name: existing?.name?.trim() || worktree.branchName,
+      branchName: worktree.branchName,
+      path: worktree.path,
+      source: existing?.source ?? "managed",
+      createdAt: existing?.createdAt ?? now,
+    })
+
+    nextWorktrees.set(nextWorktree.id, nextWorktree)
+  }
+
+  for (const worktree of existingWorktrees) {
+    if (nextWorktrees.has(worktree.id)) {
+      continue
+    }
+
+    const worktreePath = worktree.path?.trim()
+    if (!worktreePath) {
+      continue
+    }
+
+    if (hiddenWorktreePathSet.has(worktreePath)) {
+      continue
+    }
+
+    if (worktree.source === "root" && worktreePath === repoRootPath) {
+      continue
+    }
+
+    if (worktree.source === "managed") {
+      const pathExists = await desktop.fs.exists(worktreePath).catch(() => false)
+      if (!pathExists || !isWorktreeReady(worktree)) {
+        continue
+      }
+    }
+
+    nextWorktrees.set(
+      worktree.id,
+      normalizeWorktree(worktree, {
+        id: worktree.id,
+        name: worktree.name || worktree.branchName || "Worktree",
+        branchName: worktree.branchName || "No branch",
+        path: worktree.path || project.path,
+        source: worktree.source ?? "managed",
+        createdAt: worktree.createdAt ?? now,
+      })
+    )
+  }
+
+  const normalizedWorktrees = sortWorktrees(Array.from(nextWorktrees.values()))
+  const matchingProjectPathWorktree = normalizedWorktrees.find(
+    (worktree) => normalizeComparablePath(worktree.path) === normalizeComparablePath(project.path)
+  )
+  const fallbackSelectedWorktree =
+    matchingProjectPathWorktree ??
+    normalizedWorktrees.find((worktree) => worktree.id === project.rootWorktreeId) ??
+    normalizedWorktrees.find((worktree) => worktree.status === "ready") ??
+    normalizedWorktrees[0] ??
+    null
+  const fallbackRootWorktree =
+    normalizedWorktrees.find((worktree) => worktree.id === project.rootWorktreeId) ??
+    matchingProjectPathWorktree ??
+    normalizedWorktrees.find((worktree) => worktree.source === "root") ??
+    normalizedWorktrees.find((worktree) => worktree.status === "ready") ??
+    normalizedWorktrees[0] ??
+    null
+  const selectedWorktreeId =
+    normalizedWorktrees.some((worktree) => worktree.id === project.selectedWorktreeId)
+      ? project.selectedWorktreeId ?? fallbackSelectedWorktree?.id ?? null
+      : fallbackSelectedWorktree?.id ?? null
+
+  return {
+    id: project.id,
+    name: project.name,
+    iconPath,
+    path: project.path,
+    repoRootPath,
+    workspacesPath,
+    rootWorktreeId: fallbackRootWorktree?.id ?? null,
+    selectedWorktreeId,
+    targetBranch:
+      project.targetBranch?.trim() ||
+      branchData?.defaultBranch?.trim() ||
+      rootWorktree.branchName ||
+      null,
+    remoteName,
+    setupScript,
+    hiddenWorktreePaths,
+    worktrees: normalizedWorktrees,
+    addedAt: project.addedAt ?? now,
+    actions,
+    primaryActionId,
+  }
+}
+
+function resolveFocusedProjectState(
+  projects: Project[],
+  focusedProjectId: string | null,
+  activeWorktreeId: string | null
+): { focusedProjectId: string | null; activeWorktreeId: string | null } {
+  const focusedProject =
+    (focusedProjectId ? projects.find((project) => project.id === focusedProjectId) : null) ??
+    projects[0] ??
+    null
+
+  if (!focusedProject) {
+    return {
+      focusedProjectId: null,
+      activeWorktreeId: null,
+    }
+  }
+
+  return {
+    focusedProjectId: focusedProject.id,
+    activeWorktreeId: getActiveWorktree(focusedProject, activeWorktreeId)?.id ?? null,
+  }
+}
+
+async function persistSelection(
+  focusedProjectId: string | null,
+  activeWorktreeId: string | null
+): Promise<void> {
+  const store = await getStore()
+  await store.set(SELECTED_PROJECT_KEY, focusedProjectId)
+  await store.set(ACTIVE_WORKTREE_KEY, activeWorktreeId)
+  await store.save()
+}
+
+async function persistProjects(
+  projects: Project[],
+  focusedProjectId: string | null,
+  activeWorktreeId: string | null
+): Promise<void> {
+  const store = await getStore()
+  await store.set(STORE_KEY, projects)
+  await store.set(SELECTED_PROJECT_KEY, focusedProjectId)
+  await store.set(ACTIVE_WORKTREE_KEY, activeWorktreeId)
+  await store.save()
+}
+
+function replaceProject(projects: Project[], nextProject: Project): Project[] {
+  return projects.map((project) => (project.id === nextProject.id ? nextProject : project))
+}
+
+async function createNewProject(path: string, name?: string): Promise<Project> {
+  return hydrateProject({
+    id: crypto.randomUUID(),
+    name: name || path.split("/").pop() || path,
+    path,
+    addedAt: Date.now(),
+    hiddenWorktreePaths: [],
+    worktrees: [],
+  })
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   projects: [],
-  selectedProjectId: null,
+  focusedProjectId: null,
+  activeWorktreeId: null,
   defaultLocation: "",
   isLoading: true,
 
   loadProjects: async () => {
     try {
       const store = await getStore()
-      const persisted = await store.get<Project[]>(STORE_KEY)
+      const persisted = await store.get<LegacyProject[]>(STORE_KEY)
       const savedLocation = await store.get<string>(DEFAULT_LOCATION_KEY)
-      const savedSelectedId = await store.get<string>(SELECTED_PROJECT_KEY)
+      const savedFocusedId = await store.get<string>(SELECTED_PROJECT_KEY)
+      const savedActiveWorktreeId = await store.get<string>(ACTIVE_WORKTREE_KEY)
 
-      // Get default location: saved value, or fall back to home directory
       let defaultLoc = savedLocation || ""
       if (!defaultLoc) {
         try {
@@ -90,87 +394,87 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }
       }
 
-      if (persisted && Array.isArray(persisted)) {
-        const projects = persisted.map((project) => hydrateProject(project))
-
-        // Restore saved selection if valid, otherwise select first project
-        const validSelectedId = savedSelectedId && projects.some(p => p.id === savedSelectedId)
-          ? savedSelectedId
-          : projects.length > 0 ? projects[0].id : null
-
+      if (!persisted || !Array.isArray(persisted)) {
         set({
-          projects,
+          projects: [],
+          focusedProjectId: null,
+          activeWorktreeId: null,
           defaultLocation: defaultLoc,
           isLoading: false,
-          selectedProjectId: validSelectedId,
         })
-      } else {
-        set({ projects: [], defaultLocation: defaultLoc, isLoading: false })
+        return
       }
+
+      const projects = await Promise.all(persisted.map((project) => hydrateProject(project)))
+      const selection = resolveFocusedProjectState(
+        projects,
+        savedFocusedId ?? null,
+        savedActiveWorktreeId ?? null
+      )
+
+      await persistProjects(projects, selection.focusedProjectId, selection.activeWorktreeId)
+
+      set({
+        projects,
+        focusedProjectId: selection.focusedProjectId,
+        activeWorktreeId: selection.activeWorktreeId,
+        defaultLocation: defaultLoc,
+        isLoading: false,
+      })
     } catch (error) {
       console.error("Failed to load projects:", error)
-      set({ projects: [], defaultLocation: "", isLoading: false })
+      set({
+        projects: [],
+        focusedProjectId: null,
+        activeWorktreeId: null,
+        defaultLocation: "",
+        isLoading: false,
+      })
     }
   },
 
-  addProject: async (path: string, name?: string) => {
+  addProject: async (path, name) => {
     const { projects } = get()
 
-    // Check if project with this path already exists
-    if (projects.some((p) => p.path === path)) {
-      console.warn("Project already exists:", path)
+    if (projects.some((project) => project.path === path)) {
       return
     }
 
-    // Use provided name or extract folder name from path
-    const projectName = name || path.split("/").pop() || path
+    const newProject = await createNewProject(path, name)
+    const nextProjects = [newProject, ...projects]
+    const nextActiveWorktreeId = getActiveWorktree(newProject, null)?.id ?? null
 
-    const newProject: Project = {
-      id: crypto.randomUUID(),
-      name: projectName,
-      iconPath: null,
-      path,
-      addedAt: Date.now(),
-    }
-
-    const updatedProjects = [newProject, ...projects]
-
-    // Persist to the desktop store
-    const store = await getStore()
-    await store.set(STORE_KEY, updatedProjects)
-    await store.save()
-
+    await persistProjects(nextProjects, newProject.id, nextActiveWorktreeId)
     set({
-      projects: updatedProjects,
-      selectedProjectId: newProject.id, // Auto-select new project
+      projects: nextProjects,
+      focusedProjectId: newProject.id,
+      activeWorktreeId: nextActiveWorktreeId,
     })
   },
 
-  removeProject: async (id: string) => {
-    const { projects, selectedProjectId } = get()
-    const updatedProjects = projects.filter((p) => p.id !== id)
+  removeProject: async (id) => {
+    const { projects, focusedProjectId, activeWorktreeId } = get()
+    const nextProjects = projects.filter((project) => project.id !== id)
+    const selection = resolveFocusedProjectState(
+      nextProjects,
+      focusedProjectId === id ? null : focusedProjectId,
+      focusedProjectId === id ? null : activeWorktreeId
+    )
 
-    let newSelectedId = selectedProjectId
-    if (selectedProjectId === id) {
-      newSelectedId = updatedProjects.length > 0 ? updatedProjects[0].id : null
-    }
-
-    const store = await getStore()
-    await store.set(STORE_KEY, updatedProjects)
-    await store.set(SELECTED_PROJECT_KEY, newSelectedId)
-    await store.save()
-
-    set({ projects: updatedProjects, selectedProjectId: newSelectedId })
+    await persistProjects(nextProjects, selection.focusedProjectId, selection.activeWorktreeId)
+    set({
+      projects: nextProjects,
+      focusedProjectId: selection.focusedProjectId,
+      activeWorktreeId: selection.activeWorktreeId,
+    })
   },
 
-  setProjectOrder: async (projects: Project[]) => {
+  setProjectOrder: async (projects) => {
     const previousProjects = get().projects
     set({ projects })
 
-    const store = await getStore()
     try {
-      await store.set(STORE_KEY, projects)
-      await store.save()
+      await persistProjects(projects, get().focusedProjectId, get().activeWorktreeId)
     } catch (error) {
       console.error("Failed to persist project order:", error)
       set({ projects: previousProjects })
@@ -178,23 +482,208 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  selectProject: async (id: string) => {
-    set({ selectedProjectId: id })
+  selectProject: async (id) => {
+    const project = get().projects.find((candidate) => candidate.id === id) ?? null
+    if (!project) {
+      return
+    }
 
-    void (async () => {
-      try {
-        const store = await getStore()
-        await store.set(SELECTED_PROJECT_KEY, id)
-        await store.save()
-      } catch (error) {
-        console.error("Failed to persist selected project:", error)
+    const nextActiveWorktreeId = getActiveWorktree(project, null)?.id ?? null
+    set({
+      focusedProjectId: id,
+      activeWorktreeId: nextActiveWorktreeId,
+    })
+
+    try {
+      await persistSelection(id, nextActiveWorktreeId)
+    } catch (error) {
+      console.error("Failed to persist focused project:", error)
+    }
+  },
+
+  selectWorktree: async (projectId, worktreeId) => {
+    const project = get().projects.find((candidate) => candidate.id === projectId)
+    if (!project || !project.worktrees.some((worktree) => worktree.id === worktreeId && isWorktreeReady(worktree))) {
+      return
+    }
+
+    const nextProject = {
+      ...project,
+      selectedWorktreeId: worktreeId,
+    }
+    const nextProjects = replaceProject(get().projects, nextProject)
+
+    await persistProjects(nextProjects, projectId, worktreeId)
+    set({
+      projects: nextProjects,
+      focusedProjectId: projectId,
+      activeWorktreeId: worktreeId,
+    })
+  },
+
+  createWorktree: async (projectId) => {
+    const project = get().projects.find((candidate) => candidate.id === projectId)
+    if (!project) {
+      throw new Error(`Unknown project: ${projectId}`)
+    }
+
+    const identity = generateManagedWorktreeIdentity(project)
+    const creatingWorktree: ProjectWorktree = {
+      id: crypto.randomUUID(),
+      name: identity.name,
+      branchName: identity.branchName,
+      path: identity.path,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      source: "managed",
+      status: "creating",
+    }
+
+    const provisionalProject = {
+      ...project,
+      selectedWorktreeId: project.selectedWorktreeId,
+      worktrees: sortWorktrees([...project.worktrees, creatingWorktree]),
+    }
+    const provisionalProjects = replaceProject(get().projects, provisionalProject)
+    set({
+      projects: provisionalProjects,
+      focusedProjectId: project.id,
+    })
+
+    try {
+      const baseBranch =
+        project.targetBranch?.trim() || getActiveWorktree(project, null)?.branchName
+      if (!baseBranch) {
+        throw new Error("Choose a target branch before creating a worktree.")
       }
-    })()
+
+      const result = await desktop.git.createWorktree(project.repoRootPath, {
+        name: identity.name,
+        branchName: identity.branchName,
+        baseBranch,
+        targetPath: identity.path,
+      })
+
+      const readyWorktree: ProjectWorktree = {
+        ...creatingWorktree,
+        branchName: result.worktree.branchName,
+        path: result.worktree.path,
+        updatedAt: Date.now(),
+        status: "ready",
+      }
+      const latestProject =
+        get().projects.find((candidate) => candidate.id === project.id) ?? provisionalProject
+      const readyProject = {
+        ...latestProject,
+        rootWorktreeId: latestProject.rootWorktreeId ?? creatingWorktree.id,
+        selectedWorktreeId: creatingWorktree.id,
+        worktrees: sortWorktrees(
+          latestProject.worktrees.map((worktree) =>
+            worktree.id === creatingWorktree.id ? readyWorktree : worktree
+          )
+        ),
+      }
+      const readyProjects = replaceProject(get().projects, readyProject)
+      await persistProjects(readyProjects, project.id, readyWorktree.id)
+      set({
+        projects: readyProjects,
+        focusedProjectId: project.id,
+        activeWorktreeId: readyWorktree.id,
+      })
+      return readyWorktree
+    } catch (error) {
+      const latestProject =
+        get().projects.find((candidate) => candidate.id === project.id) ?? provisionalProject
+      const failedProject = {
+        ...latestProject,
+        worktrees: sortWorktrees(
+          latestProject.worktrees.filter((worktree) => worktree.id !== creatingWorktree.id)
+        ),
+      }
+      const failedProjects = replaceProject(get().projects, failedProject)
+      const selection = resolveFocusedProjectState(
+        failedProjects,
+        get().focusedProjectId,
+        get().activeWorktreeId
+      )
+      await persistProjects(failedProjects, selection.focusedProjectId, selection.activeWorktreeId)
+      set({
+        projects: failedProjects,
+        focusedProjectId: selection.focusedProjectId,
+        activeWorktreeId: selection.activeWorktreeId,
+      })
+      throw error
+    }
+  },
+
+  removeWorktree: async (projectId, worktreeId) => {
+    const project = get().projects.find((candidate) => candidate.id === projectId)
+    const worktree = project?.worktrees.find((candidate) => candidate.id === worktreeId) ?? null
+
+    if (!project || !worktree) {
+      throw new Error(`Unknown worktree: ${projectId}/${worktreeId}`)
+    }
+
+    const nextWorktrees = project.worktrees.filter((candidate) => candidate.id !== worktreeId)
+    const removingPrimaryWorktree = project.rootWorktreeId === worktreeId
+    const nextHiddenWorktreePaths = Array.from(
+      new Set([...(project.hiddenWorktreePaths ?? []), worktree.path])
+    )
+
+    if (nextWorktrees.length === 0) {
+      const nextProject = {
+        ...project,
+        rootWorktreeId: null,
+        selectedWorktreeId: null,
+        hiddenWorktreePaths: nextHiddenWorktreePaths,
+        worktrees: [],
+      }
+      const nextProjects = replaceProject(get().projects, nextProject)
+      const selection = resolveFocusedProjectState(
+        nextProjects,
+        get().focusedProjectId === projectId ? projectId : get().focusedProjectId,
+        get().activeWorktreeId === worktreeId ? null : get().activeWorktreeId
+      )
+
+      await persistProjects(nextProjects, selection.focusedProjectId, selection.activeWorktreeId)
+      set({
+        projects: nextProjects,
+        focusedProjectId: selection.focusedProjectId,
+        activeWorktreeId: selection.activeWorktreeId,
+      })
+      return
+    }
+
+    const nextPrimaryWorktree = removingPrimaryWorktree
+      ? nextWorktrees.find((candidate) => candidate.status === "ready") ?? nextWorktrees[0] ?? null
+      : nextWorktrees.find((candidate) => candidate.id === project.rootWorktreeId) ?? nextWorktrees[0] ?? null
+    const nextProject = {
+      ...project,
+      rootWorktreeId: nextPrimaryWorktree?.id ?? project.rootWorktreeId,
+      selectedWorktreeId:
+        project.selectedWorktreeId === worktreeId
+          ? nextPrimaryWorktree?.id ?? nextWorktrees[0]?.id ?? null
+          : project.selectedWorktreeId,
+      hiddenWorktreePaths: nextHiddenWorktreePaths,
+      worktrees: sortWorktrees(nextWorktrees),
+    }
+    const nextProjects = replaceProject(get().projects, nextProject)
+    const selection = resolveFocusedProjectState(
+      nextProjects,
+      get().focusedProjectId,
+      get().activeWorktreeId === worktreeId ? null : get().activeWorktreeId
+    )
+
+    await persistProjects(nextProjects, selection.focusedProjectId, selection.activeWorktreeId)
+    set({
+      projects: nextProjects,
+      focusedProjectId: selection.focusedProjectId,
+      activeWorktreeId: selection.activeWorktreeId,
+    })
   },
 
   updateProject: async (id, updates) => {
-    const { projects } = get()
-    const updatedProjects = projects.map((project) =>
+    const nextProjects = get().projects.map((project) =>
       project.id === id
         ? {
             ...project,
@@ -203,15 +692,35 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             iconPath: Object.prototype.hasOwnProperty.call(updates, "iconPath")
               ? normalizeProjectIconPath(updates.iconPath)
               : project.iconPath ?? null,
+            workspacesPath: Object.prototype.hasOwnProperty.call(updates, "workspacesPath")
+              ? normalizeProjectWorkspacesPath(updates.workspacesPath)
+              : project.workspacesPath ?? null,
+            remoteName: Object.prototype.hasOwnProperty.call(updates, "remoteName")
+              ? normalizeProjectRemoteName(updates.remoteName)
+              : project.remoteName ?? null,
+            setupScript: Object.prototype.hasOwnProperty.call(updates, "setupScript")
+              ? normalizeProjectSetupScript(updates.setupScript)
+              : project.setupScript ?? null,
           }
         : project
     )
 
-    const store = await getStore()
-    await store.set(STORE_KEY, updatedProjects)
-    await store.save()
+    await persistProjects(nextProjects, get().focusedProjectId, get().activeWorktreeId)
+    set({ projects: nextProjects })
+  },
 
-    set({ projects: updatedProjects })
+  setTargetBranch: async (projectId, branchName) => {
+    const nextProjects = get().projects.map((project) =>
+      project.id === projectId
+        ? {
+            ...project,
+            targetBranch: branchName?.trim() || null,
+          }
+        : project
+    )
+
+    await persistProjects(nextProjects, get().focusedProjectId, get().activeWorktreeId)
+    set({ projects: nextProjects })
   },
 
   addProjectAction: async (projectId, action) => {
@@ -226,19 +735,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       command: action.command.trim(),
     }
 
-    const { projects } = get()
     let created = false
-    const updatedProjects = projects.map((project) => {
+    const nextProjects = get().projects.map((project) => {
       if (project.id !== projectId) {
         return project
       }
 
       created = true
-      const nextActions = [...(project.actions ?? []), nextAction]
-
       return {
         ...project,
-        actions: nextActions,
+        actions: [...(project.actions ?? []), nextAction],
         primaryActionId: nextAction.id,
       }
     })
@@ -247,19 +753,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       throw new Error(`Unknown project: ${projectId}`)
     }
 
-    const store = await getStore()
-    await store.set(STORE_KEY, updatedProjects)
-    await store.save()
-
-    set({ projects: updatedProjects })
+    await persistProjects(nextProjects, get().focusedProjectId, get().activeWorktreeId)
+    set({ projects: nextProjects })
     return nextAction
   },
 
   updateProjectAction: async (projectId, actionId, updates) => {
-    const { projects } = get()
     let updatedAction: ProjectAction | null = null
-
-    const updatedProjects = projects.map((project) => {
+    const nextProjects = get().projects.map((project) => {
       if (project.id !== projectId) {
         return project
       }
@@ -289,19 +790,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       throw new Error(`Unknown project action: ${projectId}/${actionId}`)
     }
 
-    const store = await getStore()
-    await store.set(STORE_KEY, updatedProjects)
-    await store.save()
-
-    set({ projects: updatedProjects })
+    await persistProjects(nextProjects, get().focusedProjectId, get().activeWorktreeId)
+    set({ projects: nextProjects })
     return updatedAction
   },
 
   deleteProjectAction: async (projectId, actionId) => {
-    const { projects } = get()
     let didDelete = false
-
-    const updatedProjects = projects.map((project) => {
+    const nextProjects = get().projects.map((project) => {
       if (project.id !== projectId) {
         return project
       }
@@ -323,16 +819,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       throw new Error(`Unknown project action: ${projectId}/${actionId}`)
     }
 
-    const store = await getStore()
-    await store.set(STORE_KEY, updatedProjects)
-    await store.save()
-
-    set({ projects: updatedProjects })
+    await persistProjects(nextProjects, get().focusedProjectId, get().activeWorktreeId)
+    set({ projects: nextProjects })
   },
 
   setPrimaryAction: async (projectId, actionId) => {
-    const { projects } = get()
-    const updatedProjects = projects.map((project) => {
+    const nextProjects = get().projects.map((project) => {
       if (project.id !== projectId || !(project.actions ?? []).some((action) => action.id === actionId)) {
         return project
       }
@@ -343,14 +835,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
     })
 
-    const store = await getStore()
-    await store.set(STORE_KEY, updatedProjects)
-    await store.save()
-
-    set({ projects: updatedProjects })
+    await persistProjects(nextProjects, get().focusedProjectId, get().activeWorktreeId)
+    set({ projects: nextProjects })
   },
 
-  setDefaultLocation: async (path: string) => {
+  setDefaultLocation: async (path) => {
     const store = await getStore()
     await store.set(DEFAULT_LOCATION_KEY, path)
     await store.save()

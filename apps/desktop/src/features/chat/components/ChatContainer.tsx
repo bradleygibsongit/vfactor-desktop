@@ -37,12 +37,12 @@ function ChatTimelinePane({
 function ChatComposerPane({
   activeSessionId,
   selectedProjectId,
-  selectedProjectPath,
+  selectedWorktreePath,
   onTurnStarted,
 }: {
   activeSessionId: string | null
   selectedProjectId: string | null
-  selectedProjectPath?: string | null
+  selectedWorktreePath?: string | null
   onTurnStarted: () => void
 }) {
   const {
@@ -57,7 +57,7 @@ function ChatComposerPane({
     submit,
   } = useChatComposerState({
     selectedProjectId,
-    selectedProjectPath,
+    selectedWorktreePath,
     activeSessionId,
   })
 
@@ -66,6 +66,14 @@ function ChatComposerPane({
       input={input}
       setInput={setInput}
       onSubmit={async (text, options) => {
+        if (
+          text.trim() &&
+          status !== "streaming" &&
+          (activeSessionId != null || (selectedProjectId != null && selectedWorktreePath))
+        ) {
+          onTurnStarted()
+        }
+
         const didSubmit = await submit(text, options)
         if (didSubmit) {
           onTurnStarted()
@@ -76,6 +84,13 @@ function ChatComposerPane({
       onDismissPrompt={dismissPrompt}
       onAbort={abort}
       onExecuteCommand={async (command, args) => {
+        if (
+          command.trim() &&
+          (activeSessionId != null || (selectedProjectId != null && selectedWorktreePath))
+        ) {
+          onTurnStarted()
+        }
+
         const didStart = await executeCommand(command, args)
         if (didStart) {
           onTurnStarted()
@@ -87,13 +102,20 @@ function ChatComposerPane({
 }
 
 export function ChatContainer() {
-  const { selectedProjectId, selectedProject, activeSessionId } = useChatProjectState()
-  const threadKey = `${selectedProject?.id ?? "no-project"}:${activeSessionId ?? "draft"}`
-  const [showInlineIntro, setShowInlineIntro] = useState(activeSessionId == null)
+  const { selectedProject, selectedProjectId, selectedWorktreeId, selectedWorktree, activeSessionId } = useChatProjectState()
+  const { messages, childSessions, status, activePromptState } = useChatTimelineState(activeSessionId)
+  const threadKey = `${selectedWorktreeId ?? selectedProject?.id ?? "no-project"}:${activeSessionId ?? "draft"}`
+  const shouldShowDraftIntro =
+    (activeSessionId == null || activeSessionId.startsWith("draft-")) &&
+    messages.length === 0 &&
+    status === "idle" &&
+    activePromptState == null &&
+    (childSessions?.size ?? 0) === 0
+  const [showInlineIntro, setShowInlineIntro] = useState(shouldShowDraftIntro)
 
   useEffect(() => {
-    setShowInlineIntro(activeSessionId == null)
-  }, [activeSessionId, threadKey])
+    setShowInlineIntro(shouldShowDraftIntro)
+  }, [shouldShowDraftIntro, threadKey])
 
   return (
     <div className="h-full flex flex-col">
@@ -110,7 +132,7 @@ export function ChatContainer() {
           <ChatComposerPane
             activeSessionId={activeSessionId}
             selectedProjectId={selectedProjectId}
-            selectedProjectPath={selectedProject?.path}
+            selectedWorktreePath={selectedWorktree?.path ?? null}
             onTurnStarted={() => setShowInlineIntro(false)}
           />
         </div>

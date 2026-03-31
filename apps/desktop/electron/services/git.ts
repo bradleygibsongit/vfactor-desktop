@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process"
 import { existsSync, realpathSync, statSync } from "node:fs"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
@@ -8,14 +8,19 @@ import { promisify } from "node:util"
 import type {
   GitActionProgressEvent,
   GitBranchesResponse,
+  GitCreateWorktreeInput,
+  GitCreateWorktreeResult,
   GitFileChange,
   GitFileDiff,
   GitFileStatus,
   GitPullRequest,
   GitPullResult,
+  GitRemoveWorktreeInput,
+  GitRemoveWorktreeResult,
   GitRunStackedActionInput,
   GitRunStackedActionResult,
   GitWorkingTreeSummary,
+  GitWorktreeSummary,
 } from "../../src/desktop/contracts"
 
 const execFileAsync = promisify(execFile)
@@ -156,6 +161,94 @@ async function getRepoContext(projectPath: string): Promise<{
     projectPath: normalizedProjectPath,
     repoRoot,
     scopePath: getGitScopePath(repoRoot, normalizedProjectPath),
+  }
+}
+
+function parseBranchNameFromRef(value: string | null | undefined, head: string | null): string {
+  if (!value) {
+    return head ? `detached@${head.slice(0, 7)}` : "detached"
+  }
+
+  return value.replace(/^refs\/heads\//, "")
+}
+
+function parseGitWorktreeEntries(
+  output: string,
+  currentPath: string
+): GitWorktreeSummary[] {
+  const normalizedCurrentPath = realpathSync(currentPath)
+  const blocks = output
+    .trim()
+    .split(/\n\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+
+  return blocks
+    .map((block, index) => {
+      const lines = block.split(/\r?\n/)
+      let worktreePath: string | null = null
+      let head: string | null = null
+      let branchRef: string | null = null
+      let isDetached = false
+
+      for (const line of lines) {
+        if (line.startsWith("worktree ")) {
+          worktreePath = line.slice("worktree ".length).trim()
+          continue
+        }
+        if (line.startsWith("HEAD ")) {
+          head = line.slice("HEAD ".length).trim()
+          continue
+        }
+        if (line.startsWith("branch ")) {
+          branchRef = line.slice("branch ".length).trim()
+          continue
+        }
+        if (line === "detached") {
+          isDetached = true
+        }
+      }
+
+      if (!worktreePath) {
+        return null
+      }
+
+      let resolvedPath: string
+      try {
+        resolvedPath = realpathSync(worktreePath)
+      } catch {
+        return null
+      }
+
+      return {
+        path: resolvedPath,
+        branchName: parseBranchNameFromRef(branchRef, head),
+        head,
+        isDetached,
+        isCurrent: resolvedPath === normalizedCurrentPath,
+        isMain: index === 0,
+      }
+    })
+    .filter((entry): entry is GitWorktreeSummary => entry != null)
+}
+
+async function listGitWorktrees(projectPath: string): Promise<GitWorktreeSummary[]> {
+  const trimmedPath = ensureGitProjectPath(projectPath)
+  await runGitCommand(trimmedPath, ["rev-parse", "--show-toplevel"])
+  const output = await runGitCommandRaw(trimmedPath, ["worktree", "list", "--porcelain"])
+  return parseGitWorktreeEntries(output, trimmedPath)
+}
+
+function resolveDefaultManagedWorktreePath(repoRoot: string, branchName: string): string {
+  const repoParentPath = path.dirname(repoRoot)
+  const repoName = path.basename(repoRoot)
+  return path.join(repoParentPath, ".nucleus-worktrees", repoName, branchName)
+}
+
+async function assertWorktreeIsClean(worktreePath: string): Promise<void> {
+  const statusOutput = await runGitCommandRaw(worktreePath, ["status", "--porcelain"])
+  if (statusOutput.trim()) {
+    throw new Error("This worktree has uncommitted changes. Clean it up before removing it.")
   }
 }
 
@@ -551,6 +644,18 @@ async function hasOriginRemote(projectPath: string): Promise<boolean> {
   }
 }
 
+async function listRemoteNames(projectPath: string): Promise<string[]> {
+  try {
+    const output = await runGitCommand(projectPath, ["remote"])
+    return output
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
 async function getRemoteUrl(projectPath: string, remoteName: string): Promise<string | null> {
   try {
     return await runGitCommand(projectPath, ["remote", "get-url", remoteName])
@@ -826,6 +931,7 @@ async function getGitBranchesResponse(projectPath: string): Promise<GitBranchesR
   const upstreamBranch = await getCurrentUpstreamBranch(trimmedPath)
 
   const branches = await listLocalAndRemoteBranches(trimmedPath)
+  const remoteNames = await listRemoteNames(trimmedPath)
   const defaultBranch = await resolveDefaultBranch(trimmedPath, branches)
   const { aheadCount, behindCount } = await getAheadBehind(trimmedPath)
   const originRemote = await hasOriginRemote(trimmedPath)
@@ -835,6 +941,7 @@ async function getGitBranchesResponse(projectPath: string): Promise<GitBranchesR
     currentBranch,
     upstreamBranch,
     branches,
+    remoteNames,
     workingTreeSummary: await getWorkingTreeSummary(trimmedPath),
     aheadCount,
     behindCount,
@@ -1206,9 +1313,12 @@ async function commitChanges(
 
 async function pushCurrentBranch(
   projectPath: string,
-  branchName: string
+  branchName: string,
+  remoteName?: string | null
 ): Promise<GitRunStackedActionResult["push"]> {
   const branchData = await getGitBranchesResponse(projectPath)
+  const targetRemote =
+    remoteName?.trim() || (branchData.hasOriginRemote ? "origin" : branchData.remoteNames[0] ?? "origin")
 
   if (branchData.hasUpstream && branchData.aheadCount === 0 && branchData.behindCount === 0) {
     return {
@@ -1219,15 +1329,15 @@ async function pushCurrentBranch(
   }
 
   if (!branchData.hasUpstream) {
-    if (!branchData.hasOriginRemote) {
-      throw new Error('Cannot push because this project has no "origin" remote configured.')
+    if (!branchData.remoteNames.includes(targetRemote)) {
+      throw new Error(`Cannot push because this project has no "${targetRemote}" remote configured.`)
     }
 
-    await runGitCommand(projectPath, ["push", "-u", "origin", branchName])
+    await runGitCommand(projectPath, ["push", "-u", targetRemote, branchName])
     return {
       status: "pushed",
       branch: branchName,
-      upstreamBranch: `origin/${branchName}`,
+      upstreamBranch: `${targetRemote}/${branchName}`,
       setUpstream: true,
     }
   }
@@ -1268,7 +1378,8 @@ async function readRangeContext(projectPath: string, baseBranch: string): Promis
 async function createPullRequest(
   projectPath: string,
   branchName: string,
-  generationModel?: string | null
+  generationModel?: string | null,
+  remoteName?: string | null
 ): Promise<GitRunStackedActionResult["pr"]> {
   const existing = await getOpenPullRequest(projectPath, branchName)
   if (existing) {
@@ -1288,9 +1399,12 @@ async function createPullRequest(
     throw new Error("Unable to determine the default branch for this project.")
   }
 
-  const remoteName = getRemoteNameFromBranchRef(branchData.upstreamBranch)
-  await ensureRemoteBranchExists(projectPath, branchName, remoteName)
-  const headRef = await resolvePullRequestHeadRef(projectPath, branchName, remoteName)
+  const resolvedRemoteName =
+    getRemoteNameFromBranchRef(branchData.upstreamBranch) ??
+    remoteName?.trim() ??
+    (branchData.hasOriginRemote ? "origin" : branchData.remoteNames[0] ?? null)
+  await ensureRemoteBranchExists(projectPath, branchName, resolvedRemoteName)
+  const headRef = await resolvePullRequestHeadRef(projectPath, branchName, resolvedRemoteName)
 
   const rangeContext = await readRangeContext(projectPath, baseBranch)
   const generated = await runCodexJson<{ title: string; body: string }>(
@@ -1359,6 +1473,73 @@ export class GitService {
     const trimmedPath = ensureGitProjectPath(projectPath)
     await runGitCommand(trimmedPath, ["rev-parse", "--show-toplevel"])
     return getChangedFiles(trimmedPath)
+  }
+
+  async listWorktrees(projectPath: string): Promise<GitWorktreeSummary[]> {
+    return listGitWorktrees(projectPath)
+  }
+
+  async createWorktree(
+    projectPath: string,
+    input: GitCreateWorktreeInput
+  ): Promise<GitCreateWorktreeResult> {
+    const trimmedPath = ensureGitProjectPath(projectPath)
+    const repoRoot = await runGitCommand(trimmedPath, ["rev-parse", "--show-toplevel"])
+    const branchName = input.branchName.trim()
+    const baseBranch = input.baseBranch.trim()
+    const worktreePath =
+      input.targetPath?.trim() || resolveDefaultManagedWorktreePath(repoRoot, branchName)
+
+    if (!input.name.trim()) {
+      throw new Error("Worktree name is required.")
+    }
+    if (!branchName) {
+      throw new Error("Worktree branch name is required.")
+    }
+    if (!baseBranch) {
+      throw new Error("A base branch is required to create a worktree.")
+    }
+
+    await runGitCommand(trimmedPath, ["check-ref-format", "--branch", branchName])
+    await mkdir(path.dirname(worktreePath), { recursive: true })
+    await runGitCommand(repoRoot, ["worktree", "add", "-b", branchName, worktreePath, baseBranch])
+
+    const createdWorktree =
+      (await listGitWorktrees(worktreePath)).find(
+        (worktree) => worktree.path === realpathSync(worktreePath)
+      ) ?? {
+        path: realpathSync(worktreePath),
+        branchName,
+        head: null,
+        isDetached: false,
+        isCurrent: false,
+        isMain: false,
+      }
+
+    return {
+      worktree: createdWorktree,
+    }
+  }
+
+  async removeWorktree(
+    projectPath: string,
+    input: GitRemoveWorktreeInput
+  ): Promise<GitRemoveWorktreeResult> {
+    const trimmedPath = ensureGitProjectPath(projectPath)
+    const repoRoot = await runGitCommand(trimmedPath, ["rev-parse", "--show-toplevel"])
+    const worktreePath = ensureGitProjectPath(input.worktreePath)
+    const resolvedWorktreePath = realpathSync(worktreePath)
+
+    if (resolvedWorktreePath === realpathSync(repoRoot)) {
+      throw new Error("The root worktree cannot be removed.")
+    }
+
+    await assertWorktreeIsClean(resolvedWorktreePath)
+    await runGitCommand(repoRoot, ["worktree", "remove", resolvedWorktreePath])
+
+    return {
+      worktreePath: resolvedWorktreePath,
+    }
   }
 
   getFileDiff(projectPath: string, filePath: string, previousPath?: string | null): Promise<GitFileDiff> {
@@ -1534,7 +1715,11 @@ export class GitService {
     let pushResult: GitRunStackedActionResult["push"]
     if (wantsPush) {
       onProgress?.({ step: "pushing" })
-      pushResult = await pushCurrentBranch(trimmedPath, branchName ?? initial.currentBranch)
+      pushResult = await pushCurrentBranch(
+        trimmedPath,
+        branchName ?? initial.currentBranch,
+        input.remoteName
+      )
     } else {
       pushResult = { status: "skipped_not_requested" }
     }
@@ -1542,7 +1727,12 @@ export class GitService {
     let prResult: GitRunStackedActionResult["pr"]
     if (wantsPr) {
       onProgress?.({ step: "creating_pr" })
-      prResult = await createPullRequest(trimmedPath, branchName ?? initial.currentBranch, input.generationModel)
+      prResult = await createPullRequest(
+        trimmedPath,
+        branchName ?? initial.currentBranch,
+        input.generationModel,
+        input.remoteName
+      )
     } else {
       prResult = { status: "skipped_not_requested" }
     }

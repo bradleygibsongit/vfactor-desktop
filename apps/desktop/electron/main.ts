@@ -189,8 +189,9 @@ function registerIpcHandlers(storeService: JsonStoreService): void {
       cwd: string,
       cols: number,
       rows: number,
-      initialCommand?: string
-    ) => terminalService.createSession(sessionId, cwd, cols, rows, initialCommand)
+      initialCommand?: string,
+      environment?: Record<string, string>
+    ) => terminalService.createSession(sessionId, cwd, cols, rows, initialCommand, environment)
   )
   ipcMain.handle(IPC_CHANNELS.terminalWrite, (_event, sessionId: string, data: string) =>
     terminalService.write(sessionId, data)
@@ -207,6 +208,19 @@ function registerIpcHandlers(storeService: JsonStoreService): void {
   )
   ipcMain.handle(IPC_CHANNELS.gitGetChanges, (_event, projectPath: string) =>
     gitService.getChanges(projectPath)
+  )
+  ipcMain.handle(IPC_CHANNELS.gitListWorktrees, (_event, projectPath: string) =>
+    gitService.listWorktrees(projectPath)
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.gitCreateWorktree,
+    (_event, projectPath: string, input: Parameters<GitService["createWorktree"]>[1]) =>
+      gitService.createWorktree(projectPath, input)
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.gitRemoveWorktree,
+    (_event, projectPath: string, input: Parameters<GitService["removeWorktree"]>[1]) =>
+      gitService.removeWorktree(projectPath, input)
   )
   ipcMain.handle(
     IPC_CHANNELS.gitGetFileDiff,

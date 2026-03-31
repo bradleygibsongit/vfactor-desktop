@@ -4,11 +4,12 @@ import { BranchTargetSelector } from "./BranchTargetSelector"
 import { useSidebar } from "./useSidebar"
 import { useRightSidebar } from "./useRightSidebar"
 import { Button } from "@/features/shared/components/ui/button"
+import { useCurrentProjectWorktree } from "@/features/shared/hooks"
 import { cn } from "@/lib/utils"
 import { useProjectStore } from "@/features/workspace/store"
-import { ProjectIcon } from "@/features/workspace/components/ProjectIcon"
 import { ProjectActionsControl } from "@/features/workspace/components/ProjectActionsControl"
 import { useChatStore } from "@/features/chat/store"
+import { useTabStore } from "@/features/editor/store"
 
 interface CenterToolbarProps {
   activeView?: "chat" | "settings" | "automations"
@@ -22,12 +23,14 @@ const COLLAPSED_LEFT_ACTIONS_WIDTH = 64
 export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbarProps) {
   const { isCollapsed, toggle: toggleLeft } = useSidebar()
   const { isCollapsed: isRightCollapsed, toggle: toggleRight } = useRightSidebar()
-  const { projects, selectedProjectId, selectProject } = useProjectStore()
-  const { openDraftSession, getProjectChat } = useChatStore()
-  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null
+  const selectProject = useProjectStore((state) => state.selectProject)
+  const { createOptimisticSession, getProjectChat } = useChatStore()
+  const openChatSession = useTabStore((state) => state.openChatSession)
+  const { focusedProject, focusedProjectId, activeWorktreePath, targetBranch } =
+    useCurrentProjectWorktree()
 
   // Session title needed for mobile collapsed view
-  const projectChat = selectedProjectId ? getProjectChat(selectedProjectId) : null
+  const projectChat = focusedProjectId ? getProjectChat(focusedProjectId) : null
   const activeSession =
     projectChat?.sessions.find((session) => session.id === projectChat.activeSessionId) ?? null
   const activeSessionTitle = activeSession?.title?.trim() || ""
@@ -39,13 +42,16 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
       : 0
 
   const handleCreateThread = async () => {
-    if (!selectedProject) {
+    if (!focusedProject || !focusedProjectId || !activeWorktreePath) {
       return
     }
 
     onOpenChat?.()
-    await selectProject(selectedProject.id)
-    await openDraftSession(selectedProject.id, selectedProject.path)
+    await selectProject(focusedProject.id)
+    const session = createOptimisticSession(focusedProjectId, activeWorktreePath)
+    if (session) {
+      openChatSession(session.id, session.title)
+    }
   }
 
   return (
@@ -77,7 +83,7 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
               variant="ghost"
               size="icon-sm"
               onClick={() => void handleCreateThread()}
-              disabled={!selectedProject}
+              disabled={!focusedProject || !focusedProjectId || !activeWorktreePath}
               className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
               aria-label="New thread"
             >
@@ -95,23 +101,19 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
           )}
           style={collapsedBranchOffset > 0 ? { marginLeft: collapsedBranchOffset } : undefined}
         >
-          {selectedProject ? (
-            <span className="flex min-w-0 items-center gap-2">
-              <ProjectIcon project={selectedProject} size={16} className="shrink-0" />
-              <span className="max-w-[220px] truncate text-sm font-medium text-foreground">
-                {selectedProject.name}
-              </span>
-            </span>
-          ) : null}
           {activeView === "chat" ? (
-            <BranchTargetSelector projectPath={selectedProject?.path ?? null} />
+            <BranchTargetSelector
+              projectId={focusedProjectId}
+              projectTargetBranch={targetBranch}
+              worktreePath={activeWorktreePath}
+            />
           ) : null}
         </div>
         <div className="drag-region min-w-0 flex-1 self-stretch" />
         {activeView === "chat" ? (
           <div className="hidden shrink-0 items-center gap-2 pr-3 md:flex">
-            <ProjectActionsControl />
-            {!showRightSidebar ? <SourceControlActionGroup /> : null}
+            {activeWorktreePath ? <ProjectActionsControl /> : null}
+            {activeWorktreePath && !showRightSidebar ? <SourceControlActionGroup /> : null}
             <Button
               type="button"
               onClick={toggleRight}
@@ -128,14 +130,6 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
 
       {/* Mobile controls */}
       <div className="flex shrink-0 items-center gap-1 px-3 md:hidden">
-        {selectedProject ? (
-          <span className="mr-1 flex min-w-0 items-center gap-2">
-            <ProjectIcon project={selectedProject} size={16} className="shrink-0" />
-            <span className="max-w-[140px] truncate text-sm font-medium text-foreground">
-              {selectedProject.name}
-            </span>
-          </span>
-        ) : null}
         <Button
           type="button"
           onClick={toggleLeft}
@@ -153,7 +147,7 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
               onClick={() => void handleCreateThread()}
               variant="ghost"
               size="icon-sm"
-              disabled={!selectedProject}
+              disabled={!focusedProject || !focusedProjectId || !activeWorktreePath}
               className="shrink-0 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
               aria-label="New thread"
             >
