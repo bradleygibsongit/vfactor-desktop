@@ -26,13 +26,11 @@ import {
   RemoveWorktreeModal,
 } from "@/features/workspace/components/modals"
 import { ProjectIcon } from "@/features/workspace/components/ProjectIcon"
+import { useChatStore } from "@/features/chat/store"
 import { useProjectStore } from "@/features/workspace/store"
 import { useProjectGitStore } from "@/features/shared/hooks/projectGitStore"
 import { openFolderPicker } from "@/features/workspace/utils/folderDialog"
-import { runCommandInProjectTerminal } from "@/features/terminal/utils/projectTerminal"
-import { buildWorkspaceSetupScriptEnvironment } from "@/features/workspace/utils/setupScript"
 import { useSidebar } from "./useSidebar"
-import { useRightSidebar } from "./useRightSidebar"
 import { SidebarShell } from "./SidebarShell"
 import { Button } from "@/features/shared/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -166,19 +164,21 @@ export function LeftSidebar({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
   const { isCollapsed, width, setWidth, toggle } = useSidebar()
-  const { expand: expandRightSidebar } = useRightSidebar()
   const {
     projects,
     focusedProjectId,
     activeWorktreeId,
+    newWorkspaceSetupProjectId,
     isLoading,
     loadProjects,
     addProject,
     selectProject,
     selectWorktree,
-    createWorktree,
+    startNewWorkspaceSetup,
+    cancelNewWorkspaceSetup,
     setProjectOrder,
   } = useProjectStore()
+  const setWorkspaceSetupState = useChatStore((state) => state.setWorkspaceSetupState)
   const requestGitRefresh = useProjectGitStore((state) => state.requestRefresh)
   const ensureGitEntry = useProjectGitStore((state) => state.ensureEntry)
   const gitEntriesByProjectPath = useProjectGitStore((state) => state.entriesByProjectPath)
@@ -259,31 +259,19 @@ export function LeftSidebar({
   const handleCreateWorktree = async (event: React.MouseEvent<HTMLButtonElement>, project: Project) => {
     event.stopPropagation()
     onOpenChat?.()
+    setWorkspaceSetupState(project.id, null)
+    startNewWorkspaceSetup(project.id)
     await selectProject(project.id)
-    const readyWorktree = await createWorktree(project.id)
-    const setupEnvironment = buildWorkspaceSetupScriptEnvironment(project, readyWorktree)
-    const setupScript = project.setupScript?.trim()
-
-    if (!setupScript) {
-      return
-    }
-
-    try {
-      expandRightSidebar()
-      await runCommandInProjectTerminal({
-        projectId: readyWorktree.id,
-        cwd: readyWorktree.path,
-        command: project.setupScript ?? "",
-        environment: setupEnvironment,
-      })
-    } catch (error) {
-      console.error(`Failed to run setup script for workspace "${readyWorktree.name}":`, error)
-    }
   }
 
   const handleSelectWorktree = async (project: Project, worktree: ProjectWorktree) => {
     if (!isWorktreeReady(worktree)) {
       return
+    }
+
+    if (newWorkspaceSetupProjectId) {
+      setWorkspaceSetupState(newWorkspaceSetupProjectId, null)
+      cancelNewWorkspaceSetup()
     }
 
     onOpenChat?.()
@@ -462,8 +450,12 @@ export function LeftSidebar({
           return (
             <div className="space-y-0.5">
               {project.worktrees.map((worktree) => {
+                const isProjectInNewWorkspaceSetup =
+                  focusedProjectId === project.id && newWorkspaceSetupProjectId === project.id
                 const isSelectedWorktree =
-                  focusedProjectId === project.id && activeWorktreeId === worktree.id
+                  !isProjectInNewWorkspaceSetup &&
+                  focusedProjectId === project.id &&
+                  activeWorktreeId === worktree.id
                 const isWorktreeMenuOpen = openMenuId === worktree.id
                 const isWorktreeReadyForSelection = isWorktreeReady(worktree)
                 const removeWorktreeDisabledReason = getWorktreeRemovalDisabledReason({

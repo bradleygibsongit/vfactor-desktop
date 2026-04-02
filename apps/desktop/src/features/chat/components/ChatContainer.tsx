@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import {
   useChatComposerState,
   useChatProjectState,
@@ -11,14 +10,10 @@ function ChatTimelinePane({
   threadKey,
   activeSessionId,
   selectedProject,
-  showInlineIntro,
-  workspaceSetupState,
 }: {
   threadKey: string
   activeSessionId: string | null
   selectedProject: ReturnType<typeof useChatProjectState>["selectedProject"]
-  showInlineIntro: boolean
-  workspaceSetupState: ReturnType<typeof useChatProjectState>["workspaceSetupState"]
 }) {
   const { messages, childSessions, status, activePromptState } =
     useChatTimelineState(activeSessionId)
@@ -31,8 +26,6 @@ function ChatTimelinePane({
       activePromptState={activePromptState}
       selectedProject={selectedProject}
       childSessions={childSessions}
-      showInlineIntro={showInlineIntro}
-      workspaceSetupState={workspaceSetupState}
     />
   )
 }
@@ -43,16 +36,12 @@ function ChatComposerPane({
   selectedWorktreePath,
   selectedWorktreeId,
   selectedWorktree,
-  isWorkspaceSetupRunning,
-  onTurnStarted,
 }: {
   activeSessionId: string | null
   selectedProjectId: string | null
   selectedWorktreePath?: string | null
   selectedWorktreeId: string | null
   selectedWorktree: ReturnType<typeof useChatProjectState>["selectedWorktree"]
-  isWorkspaceSetupRunning: boolean
-  onTurnStarted: () => void
 }) {
   const {
     input,
@@ -76,7 +65,6 @@ function ChatComposerPane({
     <ChatInput
       input={input}
       setInput={setInput}
-      isLocked={isWorkspaceSetupRunning}
       onSubmit={async (text, options) => {
         await submit(text, options)
       }}
@@ -85,17 +73,7 @@ function ChatComposerPane({
       onDismissPrompt={dismissPrompt}
       onAbort={abort}
       onExecuteCommand={async (command, args) => {
-        if (
-          command.trim() &&
-          (activeSessionId != null || (selectedProjectId != null && selectedWorktreePath))
-        ) {
-          onTurnStarted()
-        }
-
-        const didStart = await executeCommand(command, args)
-        if (didStart) {
-          onTurnStarted()
-        }
+        await executeCommand(command, args)
       }}
       status={status}
     />
@@ -109,21 +87,8 @@ export function ChatContainer() {
     selectedWorktreeId,
     selectedWorktree,
     activeSessionId,
-    workspaceSetupState,
   } = useChatProjectState()
-  const { messages, childSessions, status, activePromptState } = useChatTimelineState(activeSessionId)
   const threadKey = `${selectedWorktreeId ?? selectedProject?.id ?? "no-project"}:${activeSessionId ?? "draft"}`
-  const shouldShowDraftIntro =
-    (activeSessionId == null || activeSessionId.startsWith("draft-")) &&
-    messages.length === 0 &&
-    status === "idle" &&
-    activePromptState == null &&
-    (childSessions?.size ?? 0) === 0
-  const [showInlineIntro, setShowInlineIntro] = useState(shouldShowDraftIntro)
-
-  useEffect(() => {
-    setShowInlineIntro(shouldShowDraftIntro)
-  }, [shouldShowDraftIntro, threadKey])
 
   return (
     <div className="h-full flex flex-col">
@@ -132,8 +97,6 @@ export function ChatContainer() {
           threadKey={threadKey}
           activeSessionId={activeSessionId}
           selectedProject={selectedProject}
-          showInlineIntro={showInlineIntro}
-          workspaceSetupState={workspaceSetupState}
         />
       </div>
       <div className="flex-shrink-0 flex justify-center">
@@ -144,8 +107,6 @@ export function ChatContainer() {
             selectedWorktreePath={selectedWorktree?.path ?? null}
             selectedWorktreeId={selectedWorktreeId}
             selectedWorktree={selectedWorktree}
-            isWorkspaceSetupRunning={workspaceSetupState?.status === "running"}
-            onTurnStarted={() => setShowInlineIntro(false)}
           />
         </div>
       </div>

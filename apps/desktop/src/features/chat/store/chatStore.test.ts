@@ -51,7 +51,7 @@ function resetChatStore() {
     activePromptBySession: {},
     currentSessionId: null,
     childSessions: new Map(),
-    workspaceSetupByWorktree: {},
+    workspaceSetupByProject: {},
     status: "idle",
     error: null,
     isLoading: false,

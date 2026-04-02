@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { Project } from "@/features/workspace/types"
 import type { ChildSessionState, MessageWithParts, RuntimePromptState } from "../types"
-import { NucleusLogo } from "@/components/NucleusLogo"
 import {
   Conversation,
   ConversationContent,
@@ -17,13 +16,11 @@ import { useStickToBottomContext } from "use-stick-to-bottom"
 import { ChatTimelineItem, InlineSubagentActivity } from "./ChatTimelineItem"
 import { formatElapsedDuration, useElapsedDuration } from "./workDuration"
 import { TurnStepsDropdown } from "./TurnStepsDropdown"
-import { Loader } from "./ai-elements/loader"
 import {
   buildChatTimelineViewModel,
   type TimelineFileChangeSummary,
 } from "./timelineViewModel"
 import type { TimelineBlock } from "./timelineActivity"
-import type { WorkspaceSetupState } from "../store/storeTypes"
 
 interface ChatMessagesProps {
   threadKey: string
@@ -32,8 +29,6 @@ interface ChatMessagesProps {
   activePromptState?: RuntimePromptState | null
   selectedProject?: Project | null
   childSessions?: Map<string, ChildSessionState>
-  showInlineIntro?: boolean
-  workspaceSetupState?: WorkspaceSetupState | null
 }
 
 interface LatestTurnDropdownBlock {
@@ -196,42 +191,6 @@ function getDisplayBlockRole(block: DisplayBlock): "user" | "assistant" | null {
   return "assistant"
 }
 
-function ChatEmptyState({
-  workspaceSetupState,
-}: {
-  workspaceSetupState?: WorkspaceSetupState | null
-}) {
-  const setupStatus = workspaceSetupState?.status ?? null
-  const setupMessage = workspaceSetupState?.message?.trim() ?? ""
-
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center">
-      <div className="flex flex-col items-center gap-6">
-        <NucleusLogo className="size-16 overflow-hidden" imageClassName="scale-125" />
-
-        <h2
-          className="text-center text-[1.5rem] leading-none tracking-[0.04em] text-foreground md:text-[1.875rem]"
-          style={{ fontFamily: '"Geist Pixel", "Geist Mono", ui-monospace, monospace' }}
-        >
-          Build cool sh*t
-        </h2>
-
-        {setupMessage ? (
-          <div
-            className={`inline-flex items-center gap-2 text-sm ${
-              setupStatus === "error" ? "text-destructive" : "text-muted-foreground"
-            }`}
-          >
-            {setupStatus === "running" ? <Loader size={14} /> : null}
-            <span>{setupMessage}</span>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-
 export function ChatMessages({
   threadKey,
   messages,
@@ -239,8 +198,6 @@ export function ChatMessages({
   activePromptState = null,
   selectedProject: _selectedProject,
   childSessions,
-  showInlineIntro = false,
-  workspaceSetupState = null,
 }: ChatMessagesProps) {
   const timelineViewModel = useMemo(
     () =>
@@ -336,24 +293,11 @@ export function ChatMessages({
   const isThreadPrepared = preparedThreadKey === threadKey
 
   if (!hasContent) {
-    if (!showInlineIntro) {
-      return (
-        <StaticConversation resetKey={_selectedProject?.id ?? "empty-chat"}>
-          <div className="min-h-full" />
-        </StaticConversation>
-      )
-    }
-
     return (
-        <StaticConversation resetKey={_selectedProject?.id ?? "empty-chat"}>
-          <div className="flex min-h-full w-full items-center justify-center">
-            <ChatEmptyState
-              key={_selectedProject?.id ?? "empty-chat"}
-              workspaceSetupState={workspaceSetupState}
-            />
-          </div>
-        </StaticConversation>
-      )
+      <StaticConversation resetKey={_selectedProject?.id ?? "empty-chat"}>
+        <div className="min-h-full" />
+      </StaticConversation>
+    )
   }
 
   return (
@@ -369,7 +313,6 @@ export function ChatMessages({
       />
       <ConversationContent className="mx-auto flex w-full max-w-[803px] flex-col gap-0 px-10 pb-10">
         <>
-          {showInlineIntro ? <ChatEmptyState workspaceSetupState={workspaceSetupState} /> : null}
           {displayBlocks.map((block, blockIndex) => {
             const previousBlock =
               blockIndex > 0 ? displayBlocks[blockIndex - 1] : null

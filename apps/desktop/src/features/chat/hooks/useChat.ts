@@ -4,10 +4,19 @@ import { useCurrentProjectWorktree } from "@/features/shared/hooks"
 import { useSettingsStore } from "@/features/settings/store/settingsStore"
 import type { Project, ProjectWorktree } from "@/features/workspace/types"
 import { useProjectStore } from "@/features/workspace/store"
+import { runCommandInProjectTerminal } from "@/features/terminal/utils/projectTerminal"
+import { buildWorkspaceSetupScriptEnvironment } from "@/features/workspace/utils/setupScript"
 import { suggestWorkspaceSetup } from "@/features/workspace/utils/workspaceSetup"
 import { useChatStore, type ChildSessionState, type MessageWithParts } from "../store"
 import { hasProjectChatSession } from "../store/sessionState"
-import type { ProjectChatState, WorkspaceSetupState } from "../store/storeTypes"
+import {
+  createWorkspaceSetupState,
+} from "../store/workspaceSetupState"
+import type {
+  ProjectChatState,
+  WorkspaceSetupState,
+  WorkspaceSetupStepId,
+} from "../store/storeTypes"
 import type {
   ChatStatus,
   CollaborationModeKind,
@@ -59,7 +68,7 @@ export function useChatProjectState(): {
     selectedWorktreeId ? state.chatByWorktree[selectedWorktreeId] ?? null : null
   )
   const workspaceSetupState = useChatStore((state) =>
-    selectedWorktreeId ? state.workspaceSetupByWorktree[selectedWorktreeId] ?? null : null
+    selectedProjectId ? state.workspaceSetupByProject[selectedProjectId] ?? null : null
   )
   const activeSessionId = getActiveSessionId(projectChat)
 
@@ -141,15 +150,12 @@ export function useChatComposerState({
   ) => Promise<boolean>
 } {
   const [draftInputsBySessionKey, setDraftInputsBySessionKey] = useState<Record<string, string>>({})
-  const workspaceSetupModel = useSettingsStore((state) => state.workspaceSetupModel)
   const {
     currentSessionId,
     status,
     activePromptBySession,
     createSession,
     createOptimisticSession,
-    loadSessionsForProject,
-    setWorkspaceSetupState,
     answerPrompt,
     dismissPrompt,
     sendMessage,
@@ -162,8 +168,6 @@ export function useChatComposerState({
       activePromptBySession: state.activePromptBySession,
       createSession: state.createSession,
       createOptimisticSession: state.createOptimisticSession,
-      loadSessionsForProject: state.loadSessionsForProject,
-      setWorkspaceSetupState: state.setWorkspaceSetupState,
       answerPrompt: state.answerPrompt,
       dismissPrompt: state.dismissPrompt,
       sendMessage: state.sendMessage,
@@ -177,9 +181,6 @@ export function useChatComposerState({
   const input = draftInputsBySessionKey[draftSessionKey] ?? ""
   const activePromptState: RuntimePromptState | null =
     activeSessionId ? activePromptBySession[activeSessionId] ?? null : null
-  const activeSessionMessages = useChatStore((state) =>
-    activeSessionId ? state.messagesBySession[activeSessionId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES
-  )
   const activePrompt = activePromptState?.status === "active" ? activePromptState.prompt : null
   const isResolvedActiveSession = activeSessionId != null && currentSessionId === activeSessionId
   const uiStatus = isResolvedActiveSession ? getUiStatus(status) : "idle"
@@ -221,63 +222,15 @@ export function useChatComposerState({
       }
 
       let targetSessionId = activeSessionId
-      const isFreshDraftSession =
-        targetSessionId != null &&
-        targetSessionId.startsWith("draft-") &&
-        activeSessionMessages.length === 0
 
       if (!selectedProjectId || !selectedWorktreePath || !selectedWorktreeId || !selectedWorktree) {
         return false
       }
 
-      let nextProjectPath = selectedWorktreePath
-
-      if (
-        selectedWorktree.source === "managed" &&
-        selectedWorktree.intentStatus === "pending" &&
-        (!targetSessionId || isFreshDraftSession)
-      ) {
-        setWorkspaceSetupState(selectedWorktreeId, {
-          status: "running",
-          message: "Setting up workspace...",
-        })
-
-        try {
-          const suggestion = await suggestWorkspaceSetup({
-            projectPath: selectedWorktreePath,
-            currentBranchName: selectedWorktree.branchName,
-            prompt: text,
-            model: workspaceSetupModel,
-          })
-          const renamedWorktree = await useProjectStore.getState().renameWorktreeFromIntent(
-            selectedProjectId,
-            selectedWorktreeId,
-            {
-              branchName: suggestion.branchName,
-              name: suggestion.workspaceName,
-            }
-          )
-
-          nextProjectPath = renamedWorktree.path
-          await loadSessionsForProject(selectedWorktreeId, renamedWorktree.path)
-          setWorkspaceSetupState(selectedWorktreeId, null)
-        } catch (error) {
-          console.error("[useChat] Failed to set up workspace before first turn:", error)
-          setWorkspaceSetupState(selectedWorktreeId, {
-            status: "error",
-            message:
-              error instanceof Error
-                ? `Workspace setup failed: ${error.message}`
-                : "Workspace setup failed.",
-          })
-          return false
-        }
-      }
-
       if (!targetSessionId) {
         setInput("")
 
-        const session = createOptimisticSession(selectedWorktreeId, nextProjectPath)
+        const session = createOptimisticSession(selectedWorktreeId, selectedWorktreePath)
         if (!session) {
           return false
         }
@@ -293,17 +246,13 @@ export function useChatComposerState({
       activeSessionId,
       clearDraftInput,
       createOptimisticSession,
-      loadSessionsForProject,
       selectedProjectId,
       selectedWorktree,
       selectedWorktreeId,
       selectedWorktreePath,
       sendMessage,
-      setWorkspaceSetupState,
       setInput,
       uiStatus,
-      workspaceSetupModel,
-      activeSessionMessages.length,
     ]
   )
 
@@ -373,6 +322,207 @@ export function useChatComposerState({
     abort,
     executeCommand: handleExecuteCommand,
     submit,
+  }
+}
+
+export function useNewWorkspaceSetupState(): {
+  isActive: boolean
+  input: string
+  setInput: (value: string) => void
+  submit: (
+    text: string,
+    options?: {
+      agent?: string
+      collaborationMode?: CollaborationModeKind
+      model?: string
+      reasoningEffort?: string | null
+    }
+  ) => Promise<boolean>
+  workspaceSetupState: WorkspaceSetupState | null
+  cancel: () => void
+} {
+  const {
+    selectedProjectId,
+    selectedProject,
+    selectedWorktree,
+    selectedWorktreePath,
+  } = useCurrentProjectWorktree()
+  const workspaceSetupModel = useSettingsStore((state) => state.workspaceSetupModel)
+  const initializeSettings = useSettingsStore((state) => state.initialize)
+  const newWorkspaceSetupProjectId = useProjectStore((state) => state.newWorkspaceSetupProjectId)
+  const cancelNewWorkspaceSetup = useProjectStore((state) => state.cancelNewWorkspaceSetup)
+  const { loadSessionsForProject, createOptimisticSession, sendMessage, setWorkspaceSetupState } =
+    useChatStore(
+      useShallow((state) => ({
+        loadSessionsForProject: state.loadSessionsForProject,
+        createOptimisticSession: state.createOptimisticSession,
+        sendMessage: state.sendMessage,
+        setWorkspaceSetupState: state.setWorkspaceSetupState,
+      }))
+    )
+  const workspaceSetupState = useChatStore((state) =>
+    selectedProjectId ? state.workspaceSetupByProject[selectedProjectId] ?? null : null
+  )
+  const [draftInputsByProjectKey, setDraftInputsByProjectKey] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    void initializeSettings()
+  }, [initializeSettings])
+
+  const draftProjectKey = selectedProjectId ? `new-workspace:${selectedProjectId}` : "new-workspace:none"
+  const input = draftInputsByProjectKey[draftProjectKey] ?? ""
+  const isActive = selectedProjectId != null && newWorkspaceSetupProjectId === selectedProjectId
+
+  const setInput = useCallback(
+    (value: string) => {
+      setDraftInputsByProjectKey((current) => ({
+        ...current,
+        [draftProjectKey]: value,
+      }))
+    },
+    [draftProjectKey]
+  )
+
+  const clearDraftInput = useCallback((projectKey: string) => {
+    setDraftInputsByProjectKey((current) => {
+      if (!(projectKey in current)) {
+        return current
+      }
+
+      const nextDrafts = { ...current }
+      delete nextDrafts[projectKey]
+      return nextDrafts
+    })
+  }, [])
+
+  const cancel = useCallback(() => {
+    cancelNewWorkspaceSetup()
+    if (selectedProjectId) {
+      setWorkspaceSetupState(selectedProjectId, null)
+    }
+  }, [cancelNewWorkspaceSetup, selectedProjectId, setWorkspaceSetupState])
+
+  const submit = useCallback(
+    async (
+      text: string,
+      options?: {
+        agent?: string
+        collaborationMode?: CollaborationModeKind
+        model?: string
+        reasoningEffort?: string | null
+      }
+    ) => {
+      if (!text.trim() || !isActive || !selectedProjectId || !selectedProject) {
+        return false
+      }
+
+      const sourceProjectPath = selectedWorktreePath ?? selectedProject.repoRootPath
+      const sourceBranchName =
+        selectedProject.targetBranch?.trim() || selectedWorktree?.branchName || "main"
+      let failedStepId: WorkspaceSetupStepId = "generate-workspace-name"
+
+      setWorkspaceSetupState(
+        selectedProjectId,
+        createWorkspaceSetupState("generate-workspace-name")
+      )
+
+      try {
+        const suggestion = await suggestWorkspaceSetup({
+          projectPath: sourceProjectPath,
+          currentBranchName: sourceBranchName,
+          prompt: text,
+          model: workspaceSetupModel,
+        })
+
+        failedStepId = "create-workspace"
+        setWorkspaceSetupState(
+          selectedProjectId,
+          createWorkspaceSetupState("create-workspace", {
+            detail: suggestion.workspaceName,
+          })
+        )
+
+        const createdWorktree = await useProjectStore.getState().createWorktreeFromIntent(
+          selectedProjectId,
+          {
+            branchName: suggestion.branchName,
+            name: suggestion.workspaceName,
+          }
+        )
+
+        const setupScript = selectedProject.setupScript?.trim()
+        if (setupScript) {
+          try {
+            await runCommandInProjectTerminal({
+              projectId: createdWorktree.id,
+              cwd: createdWorktree.path,
+              command: setupScript,
+              environment: buildWorkspaceSetupScriptEnvironment(selectedProject, createdWorktree),
+            })
+          } catch (error) {
+            console.error(
+              `[useChat] Failed to run setup script for workspace "${createdWorktree.name}":`,
+              error
+            )
+          }
+        }
+
+        failedStepId = "prepare-chat-session"
+        setWorkspaceSetupState(
+          selectedProjectId,
+          createWorkspaceSetupState("prepare-chat-session", {
+            detail: createdWorktree.name,
+          })
+        )
+
+        await loadSessionsForProject(createdWorktree.id, createdWorktree.path)
+        const session = createOptimisticSession(createdWorktree.id, createdWorktree.path)
+        if (!session) {
+          throw new Error("Failed to prepare a chat session for the new workspace.")
+        }
+
+        clearDraftInput(draftProjectKey)
+        setWorkspaceSetupState(selectedProjectId, null)
+        cancelNewWorkspaceSetup()
+        await sendMessage(session.id, text, options)
+        return true
+      } catch (error) {
+        console.error("[useChat] Failed to create a workspace from the first prompt:", error)
+        setWorkspaceSetupState(
+          selectedProjectId,
+          createWorkspaceSetupState(failedStepId, {
+            status: "error",
+            errorMessage:
+              error instanceof Error ? error.message : "Workspace setup failed.",
+          })
+        )
+        return false
+      }
+    },
+    [
+      cancelNewWorkspaceSetup,
+      clearDraftInput,
+      createOptimisticSession,
+      draftProjectKey,
+      isActive,
+      loadSessionsForProject,
+      selectedProject,
+      selectedProjectId,
+      selectedWorktree?.branchName,
+      selectedWorktreePath,
+      sendMessage,
+      setWorkspaceSetupState,
+      workspaceSetupModel,
+    ]
+  )
+
+  return {
+    isActive,
+    input,
+    setInput,
+    submit,
+    workspaceSetupState,
+    cancel,
   }
 }
 

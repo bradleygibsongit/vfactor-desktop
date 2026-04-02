@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useCurrentProjectWorktree } from "@/features/shared/hooks"
+import { getHarnessAdapter } from "../runtime/harnesses"
 import { useChatStore } from "../store/chatStore"
 import type { RuntimeModel } from "../types"
 
@@ -11,16 +12,13 @@ export function useModels() {
   const [error, setError] = useState<string | null>(null)
 
   const fetchModels = useCallback(async () => {
-    if (!selectedWorktreeId) {
-      setModels([])
-      return
-    }
-
     setIsLoading(true)
     setError(null)
 
     try {
-      const response = await listModels(selectedWorktreeId)
+      const response = selectedWorktreeId
+        ? await listModels(selectedWorktreeId)
+        : await getHarnessAdapter("codex").listModels()
       setModels(response)
     } catch (err) {
       console.error("[useModels] Failed to fetch models:", err)

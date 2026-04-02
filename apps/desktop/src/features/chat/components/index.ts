@@ -1,5 +1,6 @@
 export { ChatContainer } from "./ChatContainer"
 export { ChatInput } from "./ChatInput"
 export { ChatMessages } from "./ChatMessages"
+export { NewWorkspaceSetupView } from "./NewWorkspaceSetupView"
 export { TabBar } from "./TabBar"
 export { TabItem } from "./TabItem"
