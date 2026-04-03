@@ -65,11 +65,14 @@ import {
 } from "@/features/settings/shortcuts"
 import openAiSymbolLightUrl from "@/assets/brands/openai-symbol-light.svg"
 import openAiSymbolDarkUrl from "@/assets/brands/openai-symbol-dark.svg"
+import { getChatInputPlaceholder } from "./chatInputConfig"
 
 interface ChatInputProps {
   input: string
   setInput: (value: string) => void
   isLocked?: boolean
+  placement?: "docked" | "intro"
+  allowSlashCommands?: boolean
   onSubmit: (
     text: string,
     options?: {
@@ -223,6 +226,8 @@ export function ChatInput({
   input,
   setInput,
   isLocked = false,
+  placement = "docked",
+  allowSlashCommands = true,
   onSubmit,
   onAbort,
   onExecuteCommand,
@@ -356,7 +361,8 @@ export function ChatInput({
     : false
 
   const atMenuKey = input.startsWith("@") ? `at:${input}` : null
-  const showSlashMenu = !isPromptActive && !isComposerLocked && isSlashMenuOpen && !isStreaming
+  const showSlashMenu =
+    allowSlashCommands && !isPromptActive && !isComposerLocked && isSlashMenuOpen && !isStreaming
 
   const showAtMenu =
     !isPromptActive &&
@@ -939,7 +945,7 @@ export function ChatInput({
       if (!canSubmit) return
 
       const trimmedInput = input.trim()
-      if (trimmedInput.startsWith("/") && !trimmedInput.includes(" ")) {
+      if (allowSlashCommands && trimmedInput.startsWith("/") && !trimmedInput.includes(" ")) {
         const commandName = trimmedInput.slice(1)
         const matchingCommand = commands.find((command) => command.name === commandName)
 
@@ -1002,6 +1008,7 @@ export function ChatInput({
       filteredFiles,
       handleSelectAgent,
       handleSelectFile,
+      allowSlashCommands,
       isComposerLocked,
     ]
   )
@@ -1028,6 +1035,7 @@ export function ChatInput({
       }
 
       if (
+        allowSlashCommands &&
         e.key === "/" &&
         !e.ctrlKey &&
         !e.metaKey &&
@@ -1149,6 +1157,7 @@ export function ChatInput({
       isImeComposing,
       isComposerLocked,
       isPromptActive,
+      allowSlashCommands,
       showSlashMenu,
       slashQuery.length,
       filteredCommands,
@@ -1191,10 +1200,14 @@ export function ChatInput({
     [commandsByReference, input]
   )
 
+  const placeholder = getChatInputPlaceholder(placement)
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-main-content px-10 pb-3"
+      className={cn(
+        placement === "intro" ? "w-full bg-transparent px-0 pb-0" : "bg-main-content px-10 pb-3"
+      )}
       aria-busy={isComposerLocked}
     >
       <div
@@ -1312,7 +1325,7 @@ export function ChatInput({
                 onKeyDown={handleKeyDown}
                 onCompositionStart={() => setIsImeComposing(true)}
                 onCompositionEnd={() => setIsImeComposing(false)}
-                placeholder="Ask anything"
+                placeholder={placeholder}
               />
 
               {showSlashMenu && (

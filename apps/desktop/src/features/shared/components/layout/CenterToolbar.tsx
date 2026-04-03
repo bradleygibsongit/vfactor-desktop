@@ -28,6 +28,7 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
     toggle: toggleRight,
   } = useRightSidebar()
   const selectProject = useProjectStore((state) => state.selectProject)
+  const newWorkspaceSetupProjectId = useProjectStore((state) => state.newWorkspaceSetupProjectId)
   const { createOptimisticSession, getProjectChat } = useChatStore()
   const openChatSession = useTabStore((state) => state.openChatSession)
   const { focusedProject, focusedProjectId, activeWorktreeId, activeWorktreePath, targetBranch } =
@@ -38,8 +39,13 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
   const activeSession =
     projectChat?.sessions.find((session) => session.id === projectChat.activeSessionId) ?? null
   const activeSessionTitle = activeSession?.title?.trim() || ""
+  const isNewWorkspaceSetupActive =
+    activeView === "chat" &&
+    focusedProjectId != null &&
+    newWorkspaceSetupProjectId === focusedProjectId
 
-  const canToggleRightSidebar = activeView === "chat" && isRightSidebarAvailable
+  const canToggleRightSidebar =
+    activeView === "chat" && isRightSidebarAvailable && !isNewWorkspaceSetupActive
   const showRightSidebar = canToggleRightSidebar && !isRightCollapsed
   const collapsedBranchOffset =
     isCollapsed && activeView === "chat"
@@ -82,7 +88,7 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
           >
             <Sidebar size={14} />
           </Button>
-          {activeView === "chat" ? (
+          {activeView === "chat" && !isNewWorkspaceSetupActive ? (
             <Button
               type="button"
               variant="ghost"
@@ -106,7 +112,7 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
           )}
           style={collapsedBranchOffset > 0 ? { marginLeft: collapsedBranchOffset } : undefined}
         >
-          {activeView === "chat" ? (
+          {activeView === "chat" && !isNewWorkspaceSetupActive ? (
             <BranchTargetSelector
               projectId={focusedProjectId}
               projectTargetBranch={targetBranch}
@@ -115,7 +121,7 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
           ) : null}
         </div>
         <div className="drag-region min-w-0 flex-1 self-stretch" />
-        {activeView === "chat" ? (
+        {activeView === "chat" && !isNewWorkspaceSetupActive ? (
           <div className="hidden shrink-0 items-center gap-2 pr-3 md:flex">
             {activeWorktreePath ? <ProjectActionsControl /> : null}
             {activeWorktreePath && !showRightSidebar ? <SourceControlActionGroup /> : null}
@@ -147,7 +153,7 @@ export function CenterToolbar({ activeView = "chat", onOpenChat }: CenterToolbar
         >
           <Sidebar size={14} />
         </Button>
-        {isCollapsed && activeView === "chat" ? (
+        {isCollapsed && activeView === "chat" && !isNewWorkspaceSetupActive ? (
           <div className="flex min-w-0 items-center gap-2 md:hidden">
             <Button
               type="button"

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { AutomationsPage } from "@/features/automations/components/AutomationsPage"
-import { ChatContainer, TabBar } from "@/features/chat/components"
+import { ChatContainer, NewWorkspaceSetupView, TabBar } from "@/features/chat/components"
 import { FileViewer, ProjectDiffViewer } from "@/features/editor/components"
 import { SettingsPage } from "@/features/settings/components/SettingsPage"
 import { useTabStore } from "@/features/editor/store"
@@ -75,8 +75,8 @@ function NoWorkspaceSelectedState({
       </div>
       <div className="relative z-10 flex flex-col items-center">
         <NucleusLogo className="size-20" />
-        <h1 className="mt-5 font-pixel text-4xl tracking-tight text-foreground">
-          Nucleus
+        <h1 className="mt-5 text-center font-pixel text-4xl tracking-tight text-foreground">
+          Build cool sh*t
         </h1>
         <div className="mt-8 flex items-center gap-3">
           <Button type="button" className="cursor-pointer hover:bg-primary/80" onClick={onOpenProject}>
@@ -95,6 +95,7 @@ export function MainContent({ activeView, activeSettingsSection }: MainContentPr
   const { focusedProjectId, activeWorktreeId, activeWorktreePath } = useCurrentProjectWorktree()
   const { getProjectChat, openDraftSession, createOptimisticSession, selectSession } = useChatStore()
   const addProject = useProjectStore((state) => state.addProject)
+  const newWorkspaceSetupProjectId = useProjectStore((state) => state.newWorkspaceSetupProjectId)
   const [quickStartOpen, setQuickStartOpen] = useState(false)
   const {
     initialize,
@@ -251,6 +252,15 @@ export function MainContent({ activeView, activeSettingsSection }: MainContentPr
       <main className="flex-1 min-w-80 bg-main-content text-main-content-foreground overflow-hidden flex flex-col">
         <UpdateBanner />
         <AutomationsPage />
+      </main>
+    )
+  }
+
+  if (focusedProjectId && newWorkspaceSetupProjectId === focusedProjectId) {
+    return (
+      <main className="flex-1 min-w-80 bg-main-content text-main-content-foreground overflow-hidden flex flex-col">
+        <UpdateBanner />
+        <NewWorkspaceSetupView />
       </main>
     )
   }

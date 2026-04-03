@@ -65,7 +65,7 @@ interface ChatState {
   activePromptBySession: Record<string, RuntimePromptState>
   currentSessionId: string | null
   childSessions: Map<string, ChildSessionState>
-  workspaceSetupByWorktree: Record<string, WorkspaceSetupState>
+  workspaceSetupByProject: Record<string, WorkspaceSetupState>
   status: ChatStatus | "connecting"
   error: string | null
   isLoading: boolean
@@ -92,7 +92,7 @@ interface ChatState {
   onFileChange: (listener: (event: FileChangeEvent) => void) => () => void
   setActivePrompt: (sessionId: string, prompt: RuntimePrompt) => void
   clearActivePrompt: (sessionId: string) => void
-  setWorkspaceSetupState: (worktreeId: string, setupState: WorkspaceSetupState | null) => void
+  setWorkspaceSetupState: (projectId: string, setupState: WorkspaceSetupState | null) => void
   dismissPrompt: (sessionId: string) => Promise<void>
   answerPrompt: (sessionId: string, response: RuntimePromptResponse) => Promise<void>
   sendMessage: (
@@ -327,7 +327,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activePromptBySession: {},
   currentSessionId: null,
   childSessions: new Map<string, ChildSessionState>(),
-  workspaceSetupByWorktree: {},
+  workspaceSetupByProject: {},
   status: "idle",
   error: null,
   isLoading: true,
@@ -515,11 +515,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       )
 
       const nextChatByWorktree = { ...state.chatByWorktree }
-      const nextWorkspaceSetupByWorktree = { ...state.workspaceSetupByWorktree }
+      const nextWorkspaceSetupByProject = { ...state.workspaceSetupByProject }
       for (const worktreeId of worktreeIdsToRemove) {
         delete nextChatByWorktree[worktreeId]
-        delete nextWorkspaceSetupByWorktree[worktreeId]
       }
+      delete nextWorkspaceSetupByProject[projectId]
 
       const nextMessagesBySession = { ...state.messagesBySession }
       const nextActivePromptBySession = { ...state.activePromptBySession }
@@ -536,7 +536,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         chatByWorktree: nextChatByWorktree,
         messagesBySession: nextMessagesBySession,
         activePromptBySession: nextActivePromptBySession,
-        workspaceSetupByWorktree: nextWorkspaceSetupByWorktree,
+        workspaceSetupByProject: nextWorkspaceSetupByProject,
         currentSessionId: isRemovingCurrentSession ? null : state.currentSessionId,
         childSessions: isRemovingCurrentSession
           ? new Map<string, ChildSessionState>()
@@ -562,12 +562,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       const sessionIdsToRemove = new Set(projectChat.sessions.map((session) => session.id))
       const nextChatByWorktree = { ...state.chatByWorktree }
-      const nextWorkspaceSetupByWorktree = { ...state.workspaceSetupByWorktree }
+      const nextWorkspaceSetupByProject = { ...state.workspaceSetupByProject }
       const nextMessagesBySession = { ...state.messagesBySession }
       const nextActivePromptBySession = { ...state.activePromptBySession }
 
       delete nextChatByWorktree[worktreeId]
-      delete nextWorkspaceSetupByWorktree[worktreeId]
 
       for (const sessionId of sessionIdsToRemove) {
         delete nextMessagesBySession[sessionId]
@@ -581,7 +580,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         chatByWorktree: nextChatByWorktree,
         messagesBySession: nextMessagesBySession,
         activePromptBySession: nextActivePromptBySession,
-        workspaceSetupByWorktree: nextWorkspaceSetupByWorktree,
+        workspaceSetupByProject: nextWorkspaceSetupByProject,
         currentSessionId: isRemovingCurrentSession ? null : state.currentSessionId,
         childSessions: isRemovingCurrentSession
           ? new Map<string, ChildSessionState>()
@@ -775,18 +774,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     void get()._persistState()
   },
 
-  setWorkspaceSetupState: (worktreeId, setupState) => {
+  setWorkspaceSetupState: (projectId, setupState) => {
     set((state) => {
-      const nextSetupByWorktree = { ...state.workspaceSetupByWorktree }
+      const nextSetupByProject = { ...state.workspaceSetupByProject }
 
       if (setupState == null) {
-        delete nextSetupByWorktree[worktreeId]
+        delete nextSetupByProject[projectId]
       } else {
-        nextSetupByWorktree[worktreeId] = setupState
+        nextSetupByProject[projectId] = setupState
       }
 
       return {
-        workspaceSetupByWorktree: nextSetupByWorktree,
+        workspaceSetupByProject: nextSetupByProject,
       }
     })
   },

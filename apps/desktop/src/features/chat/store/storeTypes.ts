@@ -27,7 +27,25 @@ export interface FileChangeEvent {
   event: "add" | "change" | "unlink"
 }
 
+export type WorkspaceSetupStepId =
+  | "review-request"
+  | "generate-workspace-name"
+  | "create-workspace"
+  | "prepare-chat-session"
+
+export type WorkspaceSetupStepStatus = "pending" | "active" | "completed" | "error"
+
+export interface WorkspaceSetupStep {
+  id: WorkspaceSetupStepId
+  label: string
+  status: WorkspaceSetupStepStatus
+}
+
 export interface WorkspaceSetupState {
   status: "running" | "error"
-  message: string
+  title: string
+  detail?: string | null
+  errorMessage?: string | null
+  activeStepId: WorkspaceSetupStepId
+  steps: WorkspaceSetupStep[]
 }
