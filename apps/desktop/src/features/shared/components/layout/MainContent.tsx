@@ -75,8 +75,8 @@ function NoWorkspaceSelectedState({
       </div>
       <div className="relative z-10 flex flex-col items-center">
         <NucleusLogo className="size-20" />
-        <h1 className="mt-5 font-pixel text-4xl tracking-tight text-foreground">
-          Nucleus
+        <h1 className="mt-5 text-center font-pixel text-4xl tracking-tight text-foreground">
+          Build cool sh*t
         </h1>
         <div className="mt-8 flex items-center gap-3">
           <Button type="button" className="cursor-pointer hover:bg-primary/80" onClick={onOpenProject}>
