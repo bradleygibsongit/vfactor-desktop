@@ -1,11 +1,13 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import readline from "node:readline"
 import { EVENT_CHANNELS } from "../ipc/channels"
+import { capture, captureException } from "./analytics"
 
 type EventSender = (channel: string, payload: unknown) => void
 
 export class CodexServerService {
   private process: ChildProcessWithoutNullStreams | null = null
+  private isDisposingProcess = false
 
   constructor(private readonly sendEvent: EventSender) {}
 
@@ -14,19 +16,39 @@ export class CodexServerService {
       return "Codex App Server already running"
     }
 
+    let hasReportedUnexpectedExit = false
+    this.isDisposingProcess = false
+
     const child = spawn("codex", ["app-server"], {
       stdio: "pipe",
       env: process.env,
     })
 
+    capture("agent_server_start_requested")
+
     child.on("error", (error) => {
       console.error("[codex] Failed to spawn Codex App Server:", error)
+      captureException(error, { context: "agent_server_spawn" })
+      capture("agent_server_error", { reason: "spawn_failed" })
       this.sendEvent(EVENT_CHANNELS.codexStatus, "closed")
+      this.isDisposingProcess = false
       this.process = null
     })
 
-    child.on("exit", () => {
+    child.on("exit", (code, signal) => {
+      const wasIntentionalExit = this.isDisposingProcess
+
+      if (!hasReportedUnexpectedExit && !wasIntentionalExit && (code !== 0 || signal !== null)) {
+        hasReportedUnexpectedExit = true
+        capture("agent_server_error", {
+          reason: "process_exited",
+          exit_code: code,
+          signal,
+        })
+      }
+
       this.sendEvent(EVENT_CHANNELS.codexStatus, "closed")
+      this.isDisposingProcess = false
       this.process = null
     })
 
@@ -71,6 +93,7 @@ export class CodexServerService {
       return
     }
 
+    this.isDisposingProcess = true
     this.process.kill()
     this.process = null
   }
