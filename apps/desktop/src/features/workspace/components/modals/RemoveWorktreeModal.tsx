@@ -88,7 +88,6 @@ export function RemoveWorktreeModal({
     try {
       await removeWorktree(project.id, worktree.id, {
         deleteFromDisk: deleteFromSystem,
-        clearSelection: intent === "archive",
       })
 
       const terminalTabs = (tabsByWorktree[worktree.id]?.tabs ?? []).filter(isTerminalTab)

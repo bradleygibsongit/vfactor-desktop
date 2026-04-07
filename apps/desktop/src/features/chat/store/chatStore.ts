@@ -108,6 +108,7 @@ interface ChatState {
       collaborationMode?: CollaborationModeKind
       model?: string
       reasoningEffort?: string | null
+      fastMode?: boolean
     }
   ) => Promise<void>
   abortSession: (sessionId: string) => Promise<void>
@@ -1219,6 +1220,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         collaborationMode: options?.collaborationMode,
         model: options?.model,
         reasoningEffort: options?.reasoningEffort,
+        fastMode: options?.fastMode,
         onUpdate: handleStreamingUpdate,
       })
 

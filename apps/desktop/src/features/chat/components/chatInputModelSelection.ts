@@ -10,3 +10,122 @@ export function resolveSessionSelectedModelId(
 
   return availableModelIds.includes(normalizedModelId) ? normalizedModelId : null
 }
+
+interface ResolveComposerModelIdParams {
+  activeSessionModelId: string | null
+  composerSelectedModelId?: string | null
+  defaultModelId: string | null
+  availableModelIds: string[]
+  runtimeDefaultModelId: string | null
+}
+
+function normalizeModelId(modelId: string | null | undefined): string | null {
+  const normalizedModelId = modelId?.trim() ?? null
+  return normalizedModelId ? normalizedModelId : null
+}
+
+export function resolveEffectiveComposerModelId({
+  activeSessionModelId,
+  composerSelectedModelId,
+  defaultModelId,
+  availableModelIds,
+  runtimeDefaultModelId,
+}: ResolveComposerModelIdParams): string | null {
+  const normalizedSessionModelId = normalizeModelId(activeSessionModelId)
+  if (normalizedSessionModelId && availableModelIds.includes(normalizedSessionModelId)) {
+    return normalizedSessionModelId
+  }
+
+  const normalizedComposerSelectedModelId = normalizeModelId(composerSelectedModelId)
+  if (
+    normalizedComposerSelectedModelId &&
+    availableModelIds.includes(normalizedComposerSelectedModelId)
+  ) {
+    return normalizedComposerSelectedModelId
+  }
+
+  const normalizedDefaultModelId = normalizeModelId(defaultModelId)
+  if (normalizedDefaultModelId && availableModelIds.includes(normalizedDefaultModelId)) {
+    return normalizedDefaultModelId
+  }
+
+  const normalizedRuntimeDefaultModelId = normalizeModelId(runtimeDefaultModelId)
+  if (
+    normalizedRuntimeDefaultModelId &&
+    availableModelIds.includes(normalizedRuntimeDefaultModelId)
+  ) {
+    return normalizedRuntimeDefaultModelId
+  }
+
+  return availableModelIds[0] ?? null
+}
+
+interface ResolveReasoningEffortParams {
+  overrideReasoningEffort: string | null
+  defaultReasoningEffort: string | null
+  modelDefaultReasoningEffort: string | null | undefined
+  supportedReasoningEfforts: string[] | null | undefined
+}
+
+function normalizeReasoningEffort(effort: string | null | undefined): string | null {
+  const normalizedEffort = effort?.trim() ?? null
+  return normalizedEffort ? normalizedEffort : null
+}
+
+export function resolveDefaultReasoningEffort({
+  overrideReasoningEffort,
+  defaultReasoningEffort,
+  modelDefaultReasoningEffort,
+  supportedReasoningEfforts,
+}: ResolveReasoningEffortParams): string | null {
+  const normalizedSupportedReasoningEfforts = Array.from(
+    new Set(
+      (supportedReasoningEfforts ?? [])
+        .map((effort) => effort.trim())
+        .filter((effort) => effort.length > 0)
+    )
+  )
+  const supportsReasoningEffort = (effort: string | null) =>
+    effort != null && normalizedSupportedReasoningEfforts.includes(effort)
+
+  const normalizedOverrideReasoningEffort = normalizeReasoningEffort(overrideReasoningEffort)
+  if (supportsReasoningEffort(normalizedOverrideReasoningEffort)) {
+    return normalizedOverrideReasoningEffort
+  }
+
+  const normalizedDefaultReasoningEffort = normalizeReasoningEffort(defaultReasoningEffort)
+  if (supportsReasoningEffort(normalizedDefaultReasoningEffort)) {
+    return normalizedDefaultReasoningEffort
+  }
+
+  const normalizedModelDefaultReasoningEffort = normalizeReasoningEffort(
+    modelDefaultReasoningEffort
+  )
+  if (supportsReasoningEffort(normalizedModelDefaultReasoningEffort)) {
+    return normalizedModelDefaultReasoningEffort
+  }
+
+  return normalizedSupportedReasoningEfforts[0] ?? null
+}
+
+interface ResolveFastModeParams {
+  overrideFastMode: boolean | null
+  defaultFastMode: boolean
+  supportsFastMode: boolean
+}
+
+export function resolveDefaultFastMode({
+  overrideFastMode,
+  defaultFastMode,
+  supportsFastMode,
+}: ResolveFastModeParams): boolean {
+  if (!supportsFastMode) {
+    return false
+  }
+
+  if (overrideFastMode != null) {
+    return overrideFastMode
+  }
+
+  return defaultFastMode === true
+}

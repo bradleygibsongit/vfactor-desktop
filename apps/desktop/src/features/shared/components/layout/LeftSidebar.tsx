@@ -40,9 +40,10 @@ import { cn } from "@/lib/utils"
 import type { Project, ProjectWorktree } from "@/features/workspace/types"
 import {
   SETTINGS_BACK_ICON,
-  SETTINGS_SECTIONS,
+  SETTINGS_SECTION_GROUPS,
   type SettingsSectionId,
 } from "@/features/settings/config"
+import { ModelLogo } from "@/features/chat/components/ModelLogo"
 import { isWorktreeReady } from "@/features/workspace/utils/worktrees"
 import { prewarmProjectData } from "@/features/shared/utils/prewarmProjectData"
 
@@ -648,25 +649,39 @@ export function LeftSidebar({
             </button>
 
             <nav aria-label="Settings navigation" className="space-y-1">
-              {SETTINGS_SECTIONS.map((section) => {
-                const Icon = section.icon
-                const isActive = activeSettingsSection === section.id
+              {SETTINGS_SECTION_GROUPS.map((group) => (
+                <div key={group.id} className="space-y-1">
+                  {group.label ? (
+                    <div className="px-2 pt-2 pb-1">
+                      <span className={sectionLabelClass}>{group.label}</span>
+                    </div>
+                  ) : null}
 
-                return (
-                  <button
-                    key={section.id}
-                    type="button"
-                    onClick={() => onSelectSettingsSection?.(section.id)}
-                    className={cn(
-                      expandedRowClass,
-                      isActive ? expandedRowActiveClass : expandedRowIdleClass,
-                    )}
-                  >
-                    <Icon size={16} className="shrink-0" />
-                    <span className="truncate">{section.label}</span>
-                  </button>
-                )
-              })}
+                  {group.sections.map((section) => {
+                    const Icon = section.icon
+                    const isActive = activeSettingsSection === section.id
+
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => onSelectSettingsSection?.(section.id)}
+                        className={cn(
+                          expandedRowClass,
+                          isActive ? expandedRowActiveClass : expandedRowIdleClass,
+                        )}
+                      >
+                        {section.logoKind ? (
+                          <ModelLogo kind={section.logoKind} className="size-4 shrink-0" />
+                        ) : Icon ? (
+                          <Icon size={16} className="shrink-0" />
+                        ) : null}
+                        <span className="truncate">{section.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
             </nav>
           </div>
         </div>

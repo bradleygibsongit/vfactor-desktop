@@ -1,4 +1,4 @@
-import { ArrowUp02, Brain, CaretDown, CheckCircle, Circle, DocumentValidation, Stop, X } from "@/components/icons"
+import { ArrowUp02, Brain, CaretDown, CheckCircle, Circle, DocumentValidation, Stop, X, Zap } from "@/components/icons"
 import {
   useState,
   useRef,
@@ -58,13 +58,19 @@ import { $createSkillChipNode, $isSkillChipNode, SkillChipNode } from "./SkillCh
 import { cn } from "@/lib/utils"
 import { useCurrentProjectWorktree } from "@/features/shared/hooks"
 import { useChatStore } from "../store"
+import { useSettingsStore } from "@/features/settings/store/settingsStore"
 import {
   formatShortcutBinding,
   getShortcutBinding,
   matchesShortcutBinding,
 } from "@/features/settings/shortcuts"
 import { getChatInputPlaceholder } from "./chatInputConfig"
-import { resolveSessionSelectedModelId } from "./chatInputModelSelection"
+import {
+  resolveDefaultFastMode,
+  resolveDefaultReasoningEffort,
+  resolveEffectiveComposerModelId,
+  resolveSessionSelectedModelId,
+} from "./chatInputModelSelection"
 import { ModelLogo, getModelLogoKind, type ModelLogoKind } from "./ModelLogo"
 
 interface ChatInputProps {
@@ -81,6 +87,7 @@ interface ChatInputProps {
       collaborationMode?: "default" | "plan"
       model?: string
       reasoningEffort?: string | null
+      fastMode?: boolean
     }
   ) => void
   onAbort?: () => void
@@ -141,6 +148,10 @@ export function ChatInput({
     selectedWorktreeId ? state.getProjectChat(selectedWorktreeId) : null
   )
   const setSessionModel = useChatStore((state) => state.setSessionModel)
+  const initializeSettings = useSettingsStore((state) => state.initialize)
+  const codexDefaultModel = useSettingsStore((state) => state.codexDefaultModel)
+  const codexDefaultReasoningEffort = useSettingsStore((state) => state.codexDefaultReasoningEffort)
+  const codexDefaultFastMode = useSettingsStore((state) => state.codexDefaultFastMode)
   const activeSession = useMemo(
     () =>
       sessionId
@@ -156,12 +167,13 @@ export function ChatInput({
   const [slashQuery, setSlashQuery] = useState("")
   const [isSlashMenuOpen, setIsSlashMenuOpen] = useState(false)
   const [isPlanModeEnabled, setIsPlanModeEnabled] = useState(false)
+  const [reasoningEffortOverride, setReasoningEffortOverride] = useState<RuntimeReasoningEffort | null>(null)
+  const [fastModeOverride, setFastModeOverride] = useState<boolean | null>(null)
   const [promptAnswers, setPromptAnswers] = useState<Record<string, string | string[]>>({})
   const [promptCustomAnswers, setPromptCustomAnswers] = useState<Record<string, string>>({})
   const [currentPromptQuestionIndex, setCurrentPromptQuestionIndex] = useState(0)
   const { models: availableModels, isLoading: isLoadingModels } = useModels(selectedHarnessId)
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
-  const [reasoningEffort, setReasoningEffort] = useState<RuntimeReasoningEffort | null>(null)
   const focusChatInputShortcut = useMemo(() => getShortcutBinding("focus-chat-input"), [])
   const planModeShortcut = useMemo(() => getShortcutBinding("toggle-plan-mode"), [])
   const planModeShortcutLabel = useMemo(
@@ -193,15 +205,43 @@ export function ChatInput({
   const { commands, isLoading: isLoadingCommands } = useCommands(selectedHarnessId)
   const { agents, isLoading: isLoadingAgents } = useAgents(selectedHarnessId)
   const { results: fileResults, isLoading: isLoadingFiles, search: searchFiles, clear: clearFiles } = useFileSearch()
+  const isCodexHarness = selectedHarnessId === "codex"
   const defaultModel = useMemo(
     () => availableModels.find((model) => model.isDefault) ?? availableModels[0] ?? null,
     [availableModels]
   )
-  const explicitSelectedModel = useMemo(
-    () => availableModels.find((model) => model.id === selectedModelId) ?? null,
-    [availableModels, selectedModelId]
+  const effectiveModelId = useMemo(
+    () =>
+      resolveEffectiveComposerModelId({
+        activeSessionModelId,
+        composerSelectedModelId: selectedModelId,
+        defaultModelId: isCodexHarness ? codexDefaultModel : null,
+        availableModelIds: availableModels.map((model) => model.id),
+        runtimeDefaultModelId: defaultModel?.id ?? null,
+      }),
+    [
+      activeSessionModelId,
+      availableModels,
+      codexDefaultModel,
+      defaultModel?.id,
+      isCodexHarness,
+      selectedModelId,
+    ]
   )
-  const effectiveModel = explicitSelectedModel ?? defaultModel
+  const effectiveModel = useMemo(
+    () => availableModels.find((model) => model.id === effectiveModelId) ?? null,
+    [availableModels, effectiveModelId]
+  )
+  const composerBaselineModelId = useMemo(
+    () =>
+      resolveEffectiveComposerModelId({
+        activeSessionModelId: null,
+        defaultModelId: isCodexHarness ? codexDefaultModel : null,
+        availableModelIds: availableModels.map((model) => model.id),
+        runtimeDefaultModelId: defaultModel?.id ?? null,
+      }),
+    [availableModels, codexDefaultModel, defaultModel?.id, isCodexHarness]
+  )
   const selectedModelLogoKind = useMemo(
     () =>
       effectiveModel
@@ -240,6 +280,32 @@ export function ChatInput({
 
     return defaultEffort ? [defaultEffort] : []
   }, [effectiveModel])
+  const reasoningEffort = useMemo(
+    () =>
+      resolveDefaultReasoningEffort({
+        overrideReasoningEffort: reasoningEffortOverride,
+        defaultReasoningEffort: isCodexHarness ? codexDefaultReasoningEffort : null,
+        modelDefaultReasoningEffort: effectiveModel?.defaultReasoningEffort ?? null,
+        supportedReasoningEfforts: availableReasoningEfforts,
+      }),
+    [
+      availableReasoningEfforts,
+      codexDefaultReasoningEffort,
+      effectiveModel?.defaultReasoningEffort,
+      isCodexHarness,
+      reasoningEffortOverride,
+    ]
+  )
+  const supportsFastMode = isCodexHarness && effectiveModel?.supportsFastMode === true
+  const fastMode = useMemo(
+    () =>
+      resolveDefaultFastMode({
+        overrideFastMode: fastModeOverride,
+        defaultFastMode: isCodexHarness ? codexDefaultFastMode : false,
+        supportsFastMode,
+      }),
+    [codexDefaultFastMode, fastModeOverride, isCodexHarness, supportsFastMode]
+  )
   const selectedModelLabel = effectiveModel
     ? getRuntimeModelLabel(effectiveModel)
     : selectedModelId
@@ -250,6 +316,13 @@ export function ChatInput({
     : isLoadingModels
       ? "Loading effort..."
       : "Default"
+  const fastModeTooltipLabel = !isCodexHarness
+    ? ""
+    : !supportsFastMode
+      ? "Fast mode is only available on GPT-5.4."
+      : fastMode
+        ? "Fast mode is on. Codex will prefer faster responses with higher credit usage."
+        : "Fast mode is off. Enable it for faster Codex responses on GPT-5.4."
   const isPlanModeAvailable = true
   const skillCommands = useMemo(
     () => commands.filter((command) => !!command.referenceName),
@@ -305,6 +378,10 @@ export function ChatInput({
     : input.trim().length > 0 && !isStreaming && !isComposerLocked
 
   useEffect(() => {
+    void initializeSettings()
+  }, [initializeSettings])
+
+  useEffect(() => {
     setPromptAnswers({})
     setPromptCustomAnswers({})
     setCurrentPromptQuestionIndex(0)
@@ -320,25 +397,9 @@ export function ChatInput({
   }, [activeSession?.id, activeSessionModelId, availableModels, selectedWorktreeId])
 
   useEffect(() => {
-    if (availableReasoningEfforts.length === 0) {
-      setReasoningEffort(null)
-      return
-    }
-
-    const defaultEffort = effectiveModel?.defaultReasoningEffort?.trim() ?? null
-
-    setReasoningEffort((current) => {
-      if (current && availableReasoningEfforts.includes(current)) {
-        return current
-      }
-
-      if (defaultEffort && availableReasoningEfforts.includes(defaultEffort)) {
-        return defaultEffort
-      }
-
-      return availableReasoningEfforts[0] ?? null
-    })
-  }, [availableReasoningEfforts, effectiveModel?.defaultReasoningEffort])
+    setReasoningEffortOverride(null)
+    setFastModeOverride(null)
+  }, [activeSession?.id, effectiveModel?.id, selectedHarnessId, selectedWorktreeId])
 
   useEffect(() => {
     if (!isPlanModeAvailable) {
@@ -910,14 +971,16 @@ export function ChatInput({
         onSubmit(message.trim(), {
           agent: agentName,
           collaborationMode,
-          model: selectedModelId ?? undefined,
+          model: effectiveModel?.id ?? undefined,
           reasoningEffort: collaborationMode ? reasoningEffort : null,
+          fastMode: collaborationMode ? fastMode : false,
         })
       } else {
         onSubmit(input.trim(), {
           collaborationMode,
-          model: selectedModelId ?? undefined,
+          model: effectiveModel?.id ?? undefined,
           reasoningEffort: collaborationMode ? reasoningEffort : null,
+          fastMode: collaborationMode ? fastMode : false,
         })
       }
     },
@@ -933,8 +996,9 @@ export function ChatInput({
       promptCustomAnswers,
       isPlanModeAvailable,
       isPlanModeEnabled,
-      selectedModelId,
+      effectiveModel?.id,
       reasoningEffort,
+      fastMode,
       currentPromptQuestion,
       currentPromptQuestionAnswered,
       isLastPromptQuestion,
@@ -1144,7 +1208,8 @@ export function ChatInput({
   const handleSelectModel = useCallback(
     (modelId: string | null) => {
       const trimmedModelId = modelId?.trim() || null
-      const normalizedModelId = trimmedModelId && defaultModel?.id === trimmedModelId ? null : trimmedModelId
+      const normalizedModelId =
+        trimmedModelId && composerBaselineModelId === trimmedModelId ? null : trimmedModelId
       setSelectedModelId(normalizedModelId)
 
       if (!activeSession?.id) {
@@ -1153,7 +1218,7 @@ export function ChatInput({
 
       void setSessionModel(activeSession.id, normalizedModelId)
     },
-    [activeSession?.id, defaultModel?.id, setSessionModel]
+    [activeSession?.id, composerBaselineModelId, setSessionModel]
   )
 
   return (
@@ -1345,7 +1410,7 @@ export function ChatInput({
                                 <ModelLogo kind={logoKind} className="size-5 shrink-0 text-muted-foreground/82" />
                                 <span className="truncate">{getRuntimeModelLabel(model)}</span>
                               </span>
-                              {model.id === selectedModelId || (selectedModelId == null && defaultModel?.id === model.id) ? (
+                              {model.id === effectiveModelId ? (
                                 <CheckCircle className="size-3.5 text-muted-foreground" />
                               ) : null}
                             </DropdownMenuItem>
@@ -1362,6 +1427,35 @@ export function ChatInput({
               </DropdownMenuContent>
               </DropdownMenu>}
 
+              {selectorsRow && isCodexHarness && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setFastModeOverride((current) => (current == null ? !fastMode : !current))}
+                      aria-label={fastMode ? "Disable fast mode" : "Enable fast mode"}
+                      disabled={!supportsFastMode}
+                      className={cn(
+                        "inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-transparent text-muted-foreground transition-colors",
+                        supportsFastMode ? "hover:text-foreground" : "cursor-not-allowed opacity-50",
+                        fastMode && supportsFastMode ? "bg-amber-500/10 px-2" : "w-7",
+                        fastMode &&
+                          supportsFastMode &&
+                          "text-amber-500 hover:text-amber-600 dark:text-amber-300 dark:hover:text-amber-200"
+                      )}
+                    >
+                      <Zap className="size-4 shrink-0" />
+                      {fastMode && supportsFastMode ? (
+                        <span className="overflow-hidden text-[10px] font-semibold uppercase tracking-[0.08em]">
+                          Fast
+                        </span>
+                      ) : null}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">{fastModeTooltipLabel}</TooltipContent>
+                </Tooltip>
+              )}
+
               {selectorsRow && <DropdownMenu>
               <DropdownMenuTrigger className="inline-flex h-8 items-center gap-2 px-1 text-sm text-muted-foreground transition-colors hover:text-foreground cursor-pointer">
                 <span>{reasoningEffortLabel}</span>
@@ -1372,7 +1466,7 @@ export function ChatInput({
                   availableReasoningEfforts.map((effort) => (
                     <DropdownMenuItem
                       key={effort}
-                      onClick={() => setReasoningEffort(effort)}
+                      onClick={() => setReasoningEffortOverride(effort)}
                       className="flex items-center justify-between gap-3"
                     >
                       <span>{formatReasoningEffortLabel(effort)}</span>

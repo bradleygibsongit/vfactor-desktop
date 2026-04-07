@@ -46,6 +46,9 @@ function resetSettingsStore() {
       unknown: "unknown",
     },
     workspaceSetupModel: "",
+    codexDefaultModel: "",
+    codexDefaultReasoningEffort: "",
+    codexDefaultFastMode: false,
     hasLoaded: false,
   })
 }
@@ -77,5 +80,52 @@ describe("settingsStore resolve prompts", () => {
     expect(storeData.get("gitResolvePrompts")).toMatchObject({
       blocked: "Inspect {{prUrl}}",
     })
+  })
+
+  test("initializes Codex defaults from persisted values", async () => {
+    storeData.set("codexDefaultModel", " gpt-5.4 ")
+    storeData.set("codexDefaultReasoningEffort", " high ")
+    storeData.set("codexDefaultFastMode", true)
+
+    await useSettingsStore.getState().initialize()
+
+    expect(useSettingsStore.getState().codexDefaultModel).toBe("gpt-5.4")
+    expect(useSettingsStore.getState().codexDefaultReasoningEffort).toBe("high")
+    expect(useSettingsStore.getState().codexDefaultFastMode).toBe(true)
+  })
+
+  test("persists Codex defaults after edits", async () => {
+    await useSettingsStore.getState().initialize()
+
+    useSettingsStore.getState().setCodexDefaultModel(" gpt-5.4 ")
+    useSettingsStore.getState().setCodexDefaultReasoningEffort(" medium ")
+    useSettingsStore.getState().setCodexDefaultFastMode(true)
+
+    await Bun.sleep(350)
+
+    expect(storeData.get("codexDefaultModel")).toBe("gpt-5.4")
+    expect(storeData.get("codexDefaultReasoningEffort")).toBe("medium")
+    expect(storeData.get("codexDefaultFastMode")).toBe(true)
+  })
+
+  test("reset methods clear persisted Codex defaults", async () => {
+    await useSettingsStore.getState().initialize()
+
+    useSettingsStore.getState().setCodexDefaultModel("gpt-5.4")
+    useSettingsStore.getState().setCodexDefaultReasoningEffort("high")
+    useSettingsStore.getState().setCodexDefaultFastMode(true)
+    await Bun.sleep(350)
+
+    useSettingsStore.getState().resetCodexDefaultModel()
+    useSettingsStore.getState().resetCodexDefaultReasoningEffort()
+    useSettingsStore.getState().resetCodexDefaultFastMode()
+    await Bun.sleep(350)
+
+    expect(storeData.has("codexDefaultModel")).toBe(false)
+    expect(storeData.has("codexDefaultReasoningEffort")).toBe(false)
+    expect(storeData.has("codexDefaultFastMode")).toBe(false)
+    expect(useSettingsStore.getState().codexDefaultModel).toBe("")
+    expect(useSettingsStore.getState().codexDefaultReasoningEffort).toBe("")
+    expect(useSettingsStore.getState().codexDefaultFastMode).toBe(false)
   })
 })

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { getChatInputPlaceholder } from "./chatInputConfig"
-import { resolveSessionSelectedModelId } from "./chatInputModelSelection"
+import {
+  resolveDefaultFastMode,
+  resolveDefaultReasoningEffort,
+  resolveEffectiveComposerModelId,
+  resolveSessionSelectedModelId,
+} from "./chatInputModelSelection"
 
 describe("getChatInputPlaceholder", () => {
   test("uses the intro placeholder for the first-prompt empty state", () => {
@@ -24,5 +29,67 @@ describe("resolveSessionSelectedModelId", () => {
 
   test("drops unavailable session overrides instead of carrying stale state forward", () => {
     expect(resolveSessionSelectedModelId("gpt-4.1", ["gpt-5", "gpt-5-mini"])).toBeNull()
+  })
+})
+
+describe("resolveEffectiveComposerModelId", () => {
+  test("falls back to the saved global default model when the session has no explicit override", () => {
+    expect(
+      resolveEffectiveComposerModelId({
+        activeSessionModelId: null,
+        composerSelectedModelId: null,
+        defaultModelId: "gpt-5.4",
+        availableModelIds: ["gpt-5.4", "gpt-5.4-mini"],
+        runtimeDefaultModelId: "gpt-5.4-mini",
+      })
+    ).toBe("gpt-5.4")
+  })
+
+  test("uses the draft composer selection before the first session exists", () => {
+    expect(
+      resolveEffectiveComposerModelId({
+        activeSessionModelId: null,
+        composerSelectedModelId: "gpt-5.4-mini",
+        defaultModelId: "gpt-5.4",
+        availableModelIds: ["gpt-5.4", "gpt-5.4-mini"],
+        runtimeDefaultModelId: "gpt-5.4",
+      })
+    ).toBe("gpt-5.4-mini")
+  })
+})
+
+describe("resolveDefaultReasoningEffort", () => {
+  test("falls back when the saved default reasoning is unsupported", () => {
+    expect(
+      resolveDefaultReasoningEffort({
+        overrideReasoningEffort: null,
+        defaultReasoningEffort: "max",
+        modelDefaultReasoningEffort: "medium",
+        supportedReasoningEfforts: ["low", "medium", "high"],
+      })
+    ).toBe("medium")
+  })
+
+  test("does not leak saved defaults onto models without reasoning options", () => {
+    expect(
+      resolveDefaultReasoningEffort({
+        overrideReasoningEffort: null,
+        defaultReasoningEffort: "high",
+        modelDefaultReasoningEffort: null,
+        supportedReasoningEfforts: [],
+      })
+    ).toBeNull()
+  })
+})
+
+describe("resolveDefaultFastMode", () => {
+  test("disables fast mode when the model does not support it", () => {
+    expect(
+      resolveDefaultFastMode({
+        overrideFastMode: null,
+        defaultFastMode: true,
+        supportsFastMode: false,
+      })
+    ).toBe(false)
   })
 })

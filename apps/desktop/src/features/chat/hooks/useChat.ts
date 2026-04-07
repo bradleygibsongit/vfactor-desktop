@@ -153,11 +153,13 @@ export function useChatComposerState({
       collaborationMode?: CollaborationModeKind
       model?: string
       reasoningEffort?: string | null
+      fastMode?: boolean
     }
   ) => Promise<boolean>
 } {
   const [draftInputsBySessionKey, setDraftInputsBySessionKey] = useState<Record<string, string>>({})
   const {
+    initialize,
     currentSessionId,
     status,
     activePromptBySession,
@@ -170,6 +172,7 @@ export function useChatComposerState({
     executeCommand,
   } = useChatStore(
     useShallow((state) => ({
+      initialize: state.initialize,
       currentSessionId: state.currentSessionId,
       status: state.status,
       activePromptBySession: state.activePromptBySession,
@@ -217,13 +220,14 @@ export function useChatComposerState({
   const submit = useCallback(
     async (
       text: string,
-      options?: {
-        agent?: string
-        collaborationMode?: CollaborationModeKind
-        model?: string
-        reasoningEffort?: string | null
-      }
-    ) => {
+    options?: {
+      agent?: string
+      collaborationMode?: CollaborationModeKind
+      model?: string
+      reasoningEffort?: string | null
+      fastMode?: boolean
+    }
+  ) => {
       if (!text.trim() || uiStatus === "streaming") {
         return false
       }
@@ -235,9 +239,12 @@ export function useChatComposerState({
       }
 
       if (!targetSessionId) {
-        setInput("")
+        let session = createOptimisticSession(selectedWorktreeId, selectedWorktreePath)
+        if (!session) {
+          await initialize()
+          session = createOptimisticSession(selectedWorktreeId, selectedWorktreePath)
+        }
 
-        const session = createOptimisticSession(selectedWorktreeId, selectedWorktreePath)
         if (!session) {
           return false
         }
@@ -245,6 +252,7 @@ export function useChatComposerState({
         targetSessionId = session.id
       }
 
+      setInput("")
       ensureComposerSessionTab(selectedWorktreeId, targetSessionId)
       clearDraftInput(targetSessionId)
       await sendMessage(targetSessionId, text, options)
@@ -254,6 +262,7 @@ export function useChatComposerState({
       activeSessionId,
       clearDraftInput,
       createOptimisticSession,
+      initialize,
       selectedProjectId,
       selectedWorktree,
       selectedWorktreeId,
@@ -345,6 +354,7 @@ export function useNewWorkspaceSetupState(): {
       collaborationMode?: CollaborationModeKind
       model?: string
       reasoningEffort?: string | null
+      fastMode?: boolean
     }
   ) => Promise<boolean>
   workspaceSetupState: WorkspaceSetupState | null
@@ -472,6 +482,7 @@ export function useNewWorkspaceSetupState(): {
         collaborationMode?: CollaborationModeKind
         model?: string
         reasoningEffort?: string | null
+        fastMode?: boolean
       }
     ) => {
       if (!text.trim() || !isActive || !selectedProjectId || !selectedProject) {

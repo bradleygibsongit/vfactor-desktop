@@ -26,6 +26,10 @@ import {
   type CodexTurnStartResponse,
 } from "./codexProtocol"
 import {
+  codexModelSupportsFastMode,
+  mapCodexFastModeToServiceTier,
+} from "./codexFastMode"
+import {
   type CodexPendingApprovalRequest,
   type CodexPendingUserInputRequest,
   logCodexApprovalDebug,
@@ -132,6 +136,7 @@ export class CodexHarnessAdapter implements HarnessAdapter {
             model.supportedReasoningEfforts
               ?.map((entry: { reasoningEffort: string }) => entry.reasoningEffort)
               .filter((value: string): value is string => value.length > 0) ?? [],
+          supportsFastMode: codexModelSupportsFastMode(model.id || model.model),
         }))
       )
 
@@ -162,6 +167,7 @@ export class CodexHarnessAdapter implements HarnessAdapter {
       cwd: input.projectPath ?? input.session.projectPath ?? null,
       model: input.model ?? null,
       effort: mapReasoningEffort(input.reasoningEffort),
+      serviceTier: mapCodexFastModeToServiceTier(input.fastMode),
       summary: CODEX_REASONING_SUMMARY,
       collaborationMode: input.collaborationMode
         ? {
