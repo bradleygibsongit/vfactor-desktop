@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { getHarnessAdapter } from "@/features/chat/runtime/harnesses"
 import { ChevronDownIcon } from "@/components/icons"
-import type { RuntimeModel } from "@/features/chat/types"
-import type { SettingsSectionId } from "@/features/settings/config"
-import { useSettingsStore } from "@/features/settings/store/settingsStore"
 import { Button } from "@/features/shared/components/ui/button"
 import {
   Collapsible,
@@ -18,7 +14,15 @@ import {
   FieldTitle,
 } from "@/features/shared/components/ui/field"
 import { SearchableSelect } from "@/features/shared/components/ui/searchable-select"
+import { Switch } from "@/features/shared/components/ui/switch"
 import { Textarea } from "@/features/shared/components/ui/textarea"
+import { getHarnessAdapter, getHarnessDefinition } from "@/features/chat/runtime/harnesses"
+import type { RuntimeModel } from "@/features/chat/types"
+import {
+  resolveEffectiveComposerModelId,
+} from "@/features/chat/components/chatInputModelSelection"
+import type { SettingsSectionId } from "@/features/settings/config"
+import { useSettingsStore } from "@/features/settings/store/settingsStore"
 import { UpdatesSection } from "@/features/updates/components/UpdatesSection"
 import {
   GIT_RESOLVE_REASONS,
@@ -30,11 +34,6 @@ interface SettingsPageProps {
   activeSection: SettingsSectionId
 }
 
-const SECTION_COPY: Record<SettingsSectionId, { title: string }> = {
-  git: { title: "Git" },
-  updates: { title: "Updates" },
-}
-
 const RESOLVE_REASON_LABELS: Record<GitPullRequestResolveReason, string> = {
   conflicts: "Conflicts",
   behind: "Behind base branch",
@@ -44,29 +43,10 @@ const RESOLVE_REASON_LABELS: Record<GitPullRequestResolveReason, string> = {
   unknown: "Unknown reason",
 }
 
-function GitSettingsSection() {
-  const gitGenerationModel = useSettingsStore((state) => state.gitGenerationModel)
-  const gitResolvePrompts = useSettingsStore((state) => state.gitResolvePrompts)
-  const workspaceSetupModel = useSettingsStore((state) => state.workspaceSetupModel)
-  const hasLoaded = useSettingsStore((state) => state.hasLoaded)
-  const initialize = useSettingsStore((state) => state.initialize)
-  const setGitGenerationModel = useSettingsStore((state) => state.setGitGenerationModel)
-  const setGitResolvePrompt = useSettingsStore((state) => state.setGitResolvePrompt)
-  const resetGitResolvePrompts = useSettingsStore((state) => state.resetGitResolvePrompts)
-  const resetGitGenerationModel = useSettingsStore((state) => state.resetGitGenerationModel)
-  const setWorkspaceSetupModel = useSettingsStore((state) => state.setWorkspaceSetupModel)
-  const resetWorkspaceSetupModel = useSettingsStore((state) => state.resetWorkspaceSetupModel)
+function useCodexModelsState() {
   const [availableModels, setAvailableModels] = useState<RuntimeModel[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [openResolvePrompts, setOpenResolvePrompts] = useState<
-    Partial<Record<GitPullRequestResolveReason, boolean>>
-  >({})
-  const isSettingsLoading = !hasLoaded
-
-  useEffect(() => {
-    void initialize()
-  }, [initialize])
 
   useEffect(() => {
     let cancelled = false
@@ -98,24 +78,89 @@ function GitSettingsSection() {
     }
   }, [])
 
-  const defaultModel = useMemo(
-    () => availableModels.find((model) => model.isDefault) ?? null,
+  const runtimeDefaultModel = useMemo(
+    () => availableModels.find((model) => model.isDefault) ?? availableModels[0] ?? null,
     [availableModels]
   )
 
-  const modelOptions = useMemo(() => {
-    const opts = availableModels.map((m) => ({ value: m.id, label: m.id }))
+  return {
+    availableModels,
+    isLoadingModels,
+    loadError,
+    runtimeDefaultModel,
+  }
+}
 
-    if (gitGenerationModel && !opts.some((o) => o.value === gitGenerationModel)) {
-      opts.unshift({ value: gitGenerationModel, label: gitGenerationModel })
+function buildModelOptions(
+  availableModels: RuntimeModel[],
+  additionalModelIds: Array<string | null | undefined> = []
+) {
+  const options = availableModels.map((model) => ({ value: model.id, label: model.id }))
+
+  for (const modelId of additionalModelIds) {
+    const normalizedModelId = modelId?.trim() ?? ""
+    if (!normalizedModelId || options.some((option) => option.value === normalizedModelId)) {
+      continue
     }
 
-    if (workspaceSetupModel && !opts.some((o) => o.value === workspaceSetupModel)) {
-      opts.unshift({ value: workspaceSetupModel, label: workspaceSetupModel })
-    }
+    options.unshift({ value: normalizedModelId, label: normalizedModelId })
+  }
 
-    return opts
-  }, [availableModels, gitGenerationModel, workspaceSetupModel])
+  return options
+}
+
+function buildReasoningOptions(model: RuntimeModel | null, additionalEffort?: string) {
+  const options = Array.from(
+    new Set(
+      (model?.supportedReasoningEfforts ?? [])
+        .map((effort) => effort.trim())
+        .filter((effort) => effort.length > 0)
+    )
+  ).map((effort) => ({
+    value: effort,
+    label: effort,
+  }))
+
+  const normalizedAdditionalEffort = additionalEffort?.trim() ?? ""
+  if (
+    normalizedAdditionalEffort.length > 0 &&
+    !options.some((option) => option.value === normalizedAdditionalEffort)
+  ) {
+    options.unshift({
+      value: normalizedAdditionalEffort,
+      label: normalizedAdditionalEffort,
+    })
+  }
+
+  return options
+}
+
+function GitSettingsSection() {
+  const gitGenerationModel = useSettingsStore((state) => state.gitGenerationModel)
+  const gitResolvePrompts = useSettingsStore((state) => state.gitResolvePrompts)
+  const workspaceSetupModel = useSettingsStore((state) => state.workspaceSetupModel)
+  const hasLoaded = useSettingsStore((state) => state.hasLoaded)
+  const initialize = useSettingsStore((state) => state.initialize)
+  const setGitGenerationModel = useSettingsStore((state) => state.setGitGenerationModel)
+  const setGitResolvePrompt = useSettingsStore((state) => state.setGitResolvePrompt)
+  const resetGitResolvePrompts = useSettingsStore((state) => state.resetGitResolvePrompts)
+  const resetGitGenerationModel = useSettingsStore((state) => state.resetGitGenerationModel)
+  const setWorkspaceSetupModel = useSettingsStore((state) => state.setWorkspaceSetupModel)
+  const resetWorkspaceSetupModel = useSettingsStore((state) => state.resetWorkspaceSetupModel)
+  const [openResolvePrompts, setOpenResolvePrompts] = useState<
+    Partial<Record<GitPullRequestResolveReason, boolean>>
+  >({})
+  const isSettingsLoading = !hasLoaded
+  const { availableModels, isLoadingModels, loadError, runtimeDefaultModel } = useCodexModelsState()
+
+  useEffect(() => {
+    void initialize()
+  }, [initialize])
+
+  const modelOptions = useMemo(
+    () => buildModelOptions(availableModels, [gitGenerationModel, workspaceSetupModel]),
+    [availableModels, gitGenerationModel, workspaceSetupModel]
+  )
 
   return (
     <section className="rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm">
@@ -127,7 +172,7 @@ function GitSettingsSection() {
               value={workspaceSetupModel || null}
               onValueChange={setWorkspaceSetupModel}
               options={modelOptions}
-              placeholder={defaultModel ? defaultModel.id : "Select a model"}
+              placeholder={runtimeDefaultModel ? runtimeDefaultModel.id : "Select a model"}
               searchPlaceholder="Search models"
               emptyMessage="No matching models found."
               disabled={isSettingsLoading || isLoadingModels}
@@ -145,7 +190,7 @@ function GitSettingsSection() {
               value={gitGenerationModel || null}
               onValueChange={setGitGenerationModel}
               options={modelOptions}
-              placeholder={defaultModel ? defaultModel.id : "Select a model"}
+              placeholder={runtimeDefaultModel ? runtimeDefaultModel.id : "Select a model"}
               searchPlaceholder="Search models"
               emptyMessage="No matching models found."
               disabled={isSettingsLoading || isLoadingModels}
@@ -244,8 +289,198 @@ function GitSettingsSection() {
   )
 }
 
+function CodexSettingsSection() {
+  const codexDefaultModel = useSettingsStore((state) => state.codexDefaultModel)
+  const codexDefaultReasoningEffort = useSettingsStore((state) => state.codexDefaultReasoningEffort)
+  const codexDefaultFastMode = useSettingsStore((state) => state.codexDefaultFastMode)
+  const hasLoaded = useSettingsStore((state) => state.hasLoaded)
+  const initialize = useSettingsStore((state) => state.initialize)
+  const setCodexDefaultModel = useSettingsStore((state) => state.setCodexDefaultModel)
+  const resetCodexDefaultModel = useSettingsStore((state) => state.resetCodexDefaultModel)
+  const setCodexDefaultReasoningEffort = useSettingsStore((state) => state.setCodexDefaultReasoningEffort)
+  const resetCodexDefaultReasoningEffort = useSettingsStore((state) => state.resetCodexDefaultReasoningEffort)
+  const setCodexDefaultFastMode = useSettingsStore((state) => state.setCodexDefaultFastMode)
+  const resetCodexDefaultFastMode = useSettingsStore((state) => state.resetCodexDefaultFastMode)
+  const isSettingsLoading = !hasLoaded
+  const { availableModels, isLoadingModels, loadError, runtimeDefaultModel } = useCodexModelsState()
+
+  useEffect(() => {
+    void initialize()
+  }, [initialize])
+
+  const modelOptions = useMemo(
+    () => buildModelOptions(availableModels, [codexDefaultModel]),
+    [availableModels, codexDefaultModel]
+  )
+  const effectiveDefaultModelId = useMemo(
+    () =>
+      resolveEffectiveComposerModelId({
+        activeSessionModelId: null,
+        defaultModelId: codexDefaultModel || null,
+        availableModelIds: availableModels.map((model) => model.id),
+        runtimeDefaultModelId: runtimeDefaultModel?.id ?? null,
+      }),
+    [availableModels, codexDefaultModel, runtimeDefaultModel?.id]
+  )
+  const effectiveDefaultModel = useMemo(
+    () => availableModels.find((model) => model.id === effectiveDefaultModelId) ?? null,
+    [availableModels, effectiveDefaultModelId]
+  )
+  const reasoningOptions = useMemo(
+    () => buildReasoningOptions(effectiveDefaultModel, codexDefaultReasoningEffort),
+    [codexDefaultReasoningEffort, effectiveDefaultModel]
+  )
+  const supportsFastMode = effectiveDefaultModel?.supportsFastMode === true
+  const reasoningPlaceholder =
+    effectiveDefaultModel?.defaultReasoningEffort?.trim() || reasoningOptions[0]?.value || "Select reasoning"
+
+  useEffect(() => {
+    if (!hasLoaded || !codexDefaultFastMode || supportsFastMode) {
+      return
+    }
+
+    setCodexDefaultFastMode(false)
+  }, [codexDefaultFastMode, hasLoaded, setCodexDefaultFastMode, supportsFastMode])
+
+  return (
+    <section className="rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm">
+      <div className="space-y-5 px-4 py-4">
+        <div className="space-y-1">
+          <h2 className="text-sm font-medium text-card-foreground">Codex runtime defaults</h2>
+          <p className="text-sm text-muted-foreground">
+            Choose the model behavior new Codex chats should start from. Fast mode is currently available on <span className="font-medium text-card-foreground">GPT-5.4</span> and trades higher credit usage for more speed.
+          </p>
+        </div>
+
+        <FieldGroup className="gap-4">
+          <Field>
+            <FieldTitle>Default model</FieldTitle>
+            <FieldDescription>
+              Applies when a session has no explicit model override.
+            </FieldDescription>
+            <SearchableSelect
+              value={codexDefaultModel || null}
+              onValueChange={setCodexDefaultModel}
+              options={modelOptions}
+              placeholder={runtimeDefaultModel ? runtimeDefaultModel.id : "Select a model"}
+              searchPlaceholder="Search models"
+              emptyMessage="No matching models found."
+              disabled={isSettingsLoading || isLoadingModels}
+              className="mt-2"
+              errorMessage={loadError}
+              statusMessage={
+                isSettingsLoading ? "Loading saved settings…" : isLoadingModels ? "Loading models…" : null
+              }
+            />
+          </Field>
+
+          <Field>
+            <FieldTitle>Default reasoning</FieldTitle>
+            <FieldDescription>
+              Falls back to the model default when left unset or unsupported.
+            </FieldDescription>
+            <SearchableSelect
+              value={codexDefaultReasoningEffort || null}
+              onValueChange={setCodexDefaultReasoningEffort}
+              options={reasoningOptions}
+              placeholder={reasoningPlaceholder}
+              searchPlaceholder="Search reasoning levels"
+              emptyMessage="No reasoning options available for this model."
+              disabled={isSettingsLoading || isLoadingModels || effectiveDefaultModel == null}
+              className="mt-2"
+              errorMessage={loadError}
+              statusMessage={
+                isSettingsLoading
+                  ? "Loading saved settings…"
+                  : isLoadingModels
+                    ? "Loading models…"
+                    : effectiveDefaultModel == null
+                      ? "Choose a model first."
+                      : null
+              }
+            />
+          </Field>
+
+          <Field orientation="horizontal" className="items-start gap-3">
+            <div className="flex-1 space-y-1">
+              <FieldTitle>Fast mode by default</FieldTitle>
+              <FieldDescription>
+                Uses Codex fast mode when the selected model supports it. Fast mode is GPT-5.4-only right now and uses more credits for roughly 1.5x faster responses.
+              </FieldDescription>
+            </div>
+            <Switch
+              checked={codexDefaultFastMode}
+              onCheckedChange={(checked) => setCodexDefaultFastMode(checked === true)}
+              disabled={isSettingsLoading || isLoadingModels || !supportsFastMode}
+              aria-label="Toggle Codex fast mode default"
+            />
+          </Field>
+          {!supportsFastMode ? (
+            <p className="text-xs leading-5 text-muted-foreground">
+              Fast mode is only available on GPT-5.4, so it stays off for the current default model.
+            </p>
+          ) : null}
+        </FieldGroup>
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={resetCodexDefaultFastMode} disabled={isSettingsLoading}>
+            Reset fast mode
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={resetCodexDefaultReasoningEffort} disabled={isSettingsLoading}>
+            Reset reasoning
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={resetCodexDefaultModel} disabled={isSettingsLoading}>
+            Reset model
+          </Button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function PlaceholderHarnessSettingsSection({ harnessLabel }: { harnessLabel: string }) {
+  return (
+    <section className="rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm">
+      <div className="space-y-2 px-4 py-4">
+        <h2 className="text-sm font-medium text-card-foreground">{harnessLabel} defaults</h2>
+        <p className="text-sm text-muted-foreground">
+          Runtime defaults are not configurable for {harnessLabel} yet. This page is ready for harness-specific settings once that adapter is wired up.
+        </p>
+      </div>
+    </section>
+  )
+}
+
+function getSettingsSectionTitle(activeSection: SettingsSectionId): string {
+  if (activeSection === "git") {
+    return "Git"
+  }
+
+  if (activeSection === "updates") {
+    return "Updates"
+  }
+
+  return getHarnessDefinition(activeSection).label
+}
+
+function renderSettingsSection(activeSection: SettingsSectionId) {
+  if (activeSection === "git") {
+    return <GitSettingsSection />
+  }
+
+  if (activeSection === "updates") {
+    return <UpdatesSection />
+  }
+
+  if (activeSection === "codex") {
+    return <CodexSettingsSection />
+  }
+
+  return <PlaceholderHarnessSettingsSection harnessLabel={getHarnessDefinition(activeSection).label} />
+}
+
 export function SettingsPage({ activeSection }: SettingsPageProps) {
-  const section = SECTION_COPY[activeSection]
+  const sectionTitle = getSettingsSectionTitle(activeSection)
 
   return (
     <section className="h-full overflow-y-auto bg-main-content px-4 py-4 text-main-content-foreground sm:px-5">
@@ -260,10 +495,10 @@ export function SettingsPage({ activeSection }: SettingsPageProps) {
             className="space-y-4"
           >
             <h1 className="px-1 pt-1 text-2xl font-medium tracking-tight text-main-content-foreground">
-              {section.title}
+              {sectionTitle}
             </h1>
 
-            {activeSection === "git" ? <GitSettingsSection /> : <UpdatesSection />}
+            {renderSettingsSection(activeSection)}
           </motion.div>
         </AnimatePresence>
       </div>

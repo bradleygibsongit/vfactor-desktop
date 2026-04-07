@@ -26,7 +26,12 @@ import {
   buildChatTimelineViewModel,
   type TimelineFileChangeSummary,
 } from "./timelineViewModel"
-import { getToolPart, type TimelineBlock } from "./timelineActivity"
+import {
+  getActivityGroupSummary,
+  getToolPart,
+  isActivityGroupActive,
+  type TimelineBlock,
+} from "./timelineActivity"
 import type { ChildSessionData } from "./agent-activity/AgentActivitySubagent"
 
 interface ChatMessagesProps {
@@ -286,6 +291,10 @@ function estimateDisplayBlockHeight(
   const contentWidth = Math.max(320, timelineWidthPx ?? DEFAULT_TIMELINE_WIDTH_PX)
 
   if (preparedBlock.block.type === "turnStepsDropdown") {
+    return preparedBlock.paddingTop + 56
+  }
+
+  if (preparedBlock.block.type === "activityGroup") {
     return preparedBlock.paddingTop + 56
   }
 
@@ -755,6 +764,14 @@ function DisplayBlockRow({
           messages={block.messages}
           childSessions={childSessions}
           approvalStateByMessageId={approvalStateByMessageId}
+        />
+      ) : block.type === "activityGroup" ? (
+        <TurnStepsDropdown
+          messages={block.messages}
+          childSessions={childSessions}
+          approvalStateByMessageId={approvalStateByMessageId}
+          summary={getActivityGroupSummary(block)}
+          defaultOpen={isActivityGroupActive(block)}
         />
       ) : (
         <>

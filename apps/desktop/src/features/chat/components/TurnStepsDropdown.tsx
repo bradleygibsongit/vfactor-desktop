@@ -26,6 +26,8 @@ interface TurnStepsDropdownProps {
   childSessions?: Map<string, ChildSessionData>
   approvalStateByMessageId: Map<string, RuntimeApprovalDisplayState>
   className?: string
+  summary?: string
+  defaultOpen?: boolean
 }
 
 function getAggregateToolIcon(itemType?: string): Icon {
@@ -96,9 +98,14 @@ export function TurnStepsDropdown({
   childSessions,
   approvalStateByMessageId,
   className,
+  summary: summaryOverride,
+  defaultOpen = false,
 }: TurnStepsDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const summary = useMemo(() => buildSummary(messages), [messages])
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+  const summary = useMemo(
+    () => summaryOverride ?? buildSummary(messages),
+    [messages, summaryOverride]
+  )
   const summaryToolIcons = useMemo(() => getSummaryToolIcons(messages), [messages])
   const buttonRef = useRef<HTMLButtonElement>(null)
   const preserveViewportOnToggle = useViewportAnchorToggle()

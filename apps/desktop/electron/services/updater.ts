@@ -10,7 +10,7 @@ import { capture, captureException } from "./analytics"
 const { autoUpdater } = electronUpdater
 const APP_UPDATE_CONFIG = "app-update.yml"
 const UPDATE_UNAVAILABLE_MESSAGE =
-  "In-app updates are unavailable in this build. Install Nucleus from a signed GitHub release to use the updater."
+  "In-app updates are unavailable in this build. Download the latest GitHub release manually to update."
 
 type EventSender = (channel: string, payload: unknown) => void
 

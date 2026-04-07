@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react"
-import { desktop } from "@/desktop/client"
+import { desktop, type GitPullRequest } from "@/desktop/client"
 import { FileChangesList, FileChangesToolbar, FileTreeViewer, useFileChangesState } from "@/features/version-control/components"
 import { useFileTreeStore } from "@/features/workspace/store"
 import { useTabStore } from "@/features/editor/store"
@@ -10,7 +10,7 @@ import {
   useProjectGitPullRequestChecks,
 } from "@/features/shared/hooks"
 import { PullRequestChecksPanel } from "./PullRequestChecksPanel"
-import { getChecksTabBadgeCount } from "./pullRequestChecks"
+import { getChecksTabBadgeCount, shouldAutoOpenChecksTab } from "./pullRequestChecks"
 import { useRightSidebar } from "./useRightSidebar"
 import { SidebarShell } from "./SidebarShell"
 import { SourceControlActionGroup } from "./AppHeader"
@@ -35,7 +35,9 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [fileImportError, setFileImportError] = useState<string | null>(null)
   const [isImportingFiles, setIsImportingFiles] = useState(false)
-  const previousPendingChecksKeyRef = useRef<string | null>(null)
+  const previousChecksStatusByPullRequestRef = useRef<
+    Map<string, GitPullRequest["checksStatus"] | null>
+  >(new Map())
   const { isAvailable, isCollapsed, width, setWidth, activeTab, setActiveTab, expand } = useRightSidebar()
   const { selectedWorktreeId, selectedWorktree, selectedWorktreePath } = useCurrentProjectWorktree()
   const {
@@ -107,12 +109,14 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
   }, [selectedWorktreePath, setActiveProjectPath])
 
   useEffect(() => {
-    const nextPendingChecksKey =
-      selectedWorktreePath &&
-      openPullRequest?.state === "open" &&
-      openPullRequest.checksStatus === "pending"
+    const pullRequestKey =
+      selectedWorktreePath && openPullRequest?.state === "open"
         ? `${selectedWorktreePath}:${openPullRequest.number}`
         : null
+    const previousChecksStatus = pullRequestKey
+      ? (previousChecksStatusByPullRequestRef.current.get(pullRequestKey) ?? null)
+      : null
+    const nextChecksStatus = openPullRequest?.checksStatus ?? null
 
     console.debug("[RightSidebar] checks:auto-open:evaluate", {
       selectedWorktreePath,
@@ -120,20 +124,22 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
       isCollapsed,
       pullRequestNumber: openPullRequest?.number ?? null,
       pullRequestState: openPullRequest?.state ?? null,
-      checksStatus: openPullRequest?.checksStatus ?? null,
-      previousPendingChecksKey: previousPendingChecksKeyRef.current,
-      nextPendingChecksKey,
+      checksStatus: nextChecksStatus,
+      previousChecksStatus,
+      pullRequestKey,
     })
 
-    if (nextPendingChecksKey && previousPendingChecksKeyRef.current !== nextPendingChecksKey) {
+    if (pullRequestKey && shouldAutoOpenChecksTab(previousChecksStatus, nextChecksStatus)) {
       console.debug("[RightSidebar] checks:auto-open:trigger", {
-        nextPendingChecksKey,
+        pullRequestKey,
       })
       expand()
       setActiveTab("checks")
     }
 
-    previousPendingChecksKeyRef.current = nextPendingChecksKey
+    if (pullRequestKey) {
+      previousChecksStatusByPullRequestRef.current.set(pullRequestKey, nextChecksStatus)
+    }
   }, [
     activeTab,
     expand,

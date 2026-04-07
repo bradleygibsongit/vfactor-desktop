@@ -141,6 +141,7 @@ export interface RuntimeModel {
   isDefault: boolean;
   defaultReasoningEffort?: RuntimeReasoningEffort | null;
   supportedReasoningEfforts?: RuntimeReasoningEffort[];
+  supportsFastMode?: boolean;
 }
 
 export interface RuntimePromptOption {
@@ -239,6 +240,7 @@ export interface HarnessTurnInput {
   collaborationMode?: CollaborationModeKind;
   model?: string;
   reasoningEffort?: RuntimeReasoningEffort | null;
+  fastMode?: boolean;
   onUpdate?: (result: HarnessTurnResult) => void;
 }
 

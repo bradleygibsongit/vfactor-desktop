@@ -99,7 +99,7 @@ describe("UpdaterService.checkForUpdates", () => {
     const service = new UpdaterService(() => {})
 
     await expect(service.checkForUpdates()).rejects.toThrow(
-      "In-app updates are unavailable in this build. Install Nucleus from a signed GitHub release to use the updater."
+      "In-app updates are unavailable in this build. Download the latest GitHub release manually to update."
     )
 
     expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled()
