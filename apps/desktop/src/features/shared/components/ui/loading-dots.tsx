@@ -1,6 +1,6 @@
 interface LoadingDotsProps {
   className?: string
-  variant?: "loading" | "attention"
+  variant?: "loading" | "attention" | "connecting"
 }
 
 // Radial ripple: center out, like a heartbeat pulse
@@ -24,6 +24,7 @@ const squareDots = [0, 1, 2, 3, 4, 7, 8, 11, 12, 13, 14, 15]
 
 export function LoadingDots({ className, variant = "loading" }: LoadingDotsProps) {
   const isAttention = variant === "attention"
+  const isConnecting = variant === "connecting"
 
   return (
     <div
@@ -52,9 +53,11 @@ export function LoadingDots({ className, variant = "loading" }: LoadingDotsProps
               animation: isVisible
                 ? isAttention
                   ? "dot-attention 600ms ease-in-out infinite"
-                  : "dot-pulse 700ms cubic-bezier(0.36, 0, 0.66, 1) infinite"
+                  : isConnecting
+                    ? "dot-connect 1600ms ease-in-out infinite"
+                    : "dot-pulse 700ms cubic-bezier(0.36, 0, 0.66, 1) infinite"
                 : "none",
-              animationDelay: isAttention ? "0ms" : `${animationOrder * 60}ms`,
+              animationDelay: isAttention ? "0ms" : `${animationOrder * (isConnecting ? 90 : 60)}ms`,
             }}
           />
         )

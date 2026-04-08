@@ -13,7 +13,6 @@ import { PullRequestChecksPanel } from "./PullRequestChecksPanel"
 import { getChecksTabBadgeCount, shouldAutoOpenChecksTab } from "./pullRequestChecks"
 import { useRightSidebar } from "./useRightSidebar"
 import { SidebarShell } from "./SidebarShell"
-import { SourceControlActionGroup } from "./AppHeader"
 import { RightSidebarEmptyState } from "./RightSidebarEmptyState"
 import { LayoutGroup, motion } from "framer-motion"
 import { cn } from "@/lib/utils"
@@ -31,11 +30,13 @@ const RIGHT_SIDEBAR_TABS: Array<{
   { key: "changes", label: "Changes" },
   { key: "checks", label: "Checks" },
 ]
+const COLLAPSED_HOVER_TRIGGER_WIDTH = 12
 
 export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [fileImportError, setFileImportError] = useState<string | null>(null)
   const [isImportingFiles, setIsImportingFiles] = useState(false)
+  const [isHoverPreviewOpen, setIsHoverPreviewOpen] = useState(false)
   const previousChecksStatusByPullRequestRef = useRef<
     Map<string, GitPullRequest["checksStatus"] | null>
   >(new Map())
@@ -191,26 +192,36 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
     },
     [selectedWorktreeId, selectedWorktreePath]
   )
+  const handleHoverPreviewIntent = useCallback(() => {
+    void prewarmProjectData(selectedWorktreeId, selectedWorktreePath, activeTab)
+  }, [activeTab, selectedWorktreeId, selectedWorktreePath])
+
+  useEffect(() => {
+    if (!isCollapsed && isHoverPreviewOpen) {
+      setIsHoverPreviewOpen(false)
+    }
+  }, [isCollapsed, isHoverPreviewOpen])
+
+  useEffect(() => {
+    if ((!isAvailable || activeView !== "chat") && isHoverPreviewOpen) {
+      setIsHoverPreviewOpen(false)
+    }
+  }, [activeView, isAvailable, isHoverPreviewOpen])
 
   if (!isAvailable || isCollapsed || activeView !== "chat") {
-    return null
+    if (!isAvailable || activeView !== "chat") {
+      return null
+    }
   }
 
-  return (
-    <SidebarShell
-      width={width}
-      setWidth={setWidth}
-      isCollapsed={isCollapsed}
-      side="right"
-      sizeConstraintClass="min-w-[300px] max-w-[560px]"
-    >
-      {/* Toolbar header */}
-      <div className="flex h-11 shrink-0 items-center justify-end border-b border-sidebar-border/70 px-3">
-        <div className="drag-region min-w-0 flex-1 self-stretch" />
-        <SourceControlActionGroup projectPath={selectedWorktreePath} />
-      </div>
+  const sidebarHeader = (
+    <div className="flex h-11 shrink-0 items-center border-b border-sidebar-border/70 px-3">
+      <div className="drag-region min-w-0 flex-1 self-stretch" />
+    </div>
+  )
 
-      {/* Tab header */}
+  const sidebarBody = (
+    <>
       <div className="shrink-0 px-3 py-1.5">
         <LayoutGroup id="right-sidebar-tabs">
           <div className="flex items-center gap-1">
@@ -269,12 +280,11 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
         </LayoutGroup>
       </div>
 
-      {/* Changes toolbar — fixed below tabs, only visible on changes tab with groups */}
-      {activeTab === "changes" && projectChanges.length > 0 && (
+      {activeTab === "changes" && projectChanges.length > 0 ? (
         <div className="shrink-0 border-b border-sidebar-border/70 py-1">
           <FileChangesToolbar handle={fileChangesState} />
         </div>
-      )}
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="app-scrollbar-sm flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-1.5">
@@ -364,6 +374,44 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
           )}
         </div>
       </div>
+    </>
+  )
+
+  if (isCollapsed) {
+    return (
+      <>
+        <div
+          className="fixed inset-y-0 right-0 z-30"
+          style={{ width: COLLAPSED_HOVER_TRIGGER_WIDTH }}
+          onMouseEnter={() => {
+            handleHoverPreviewIntent()
+            setIsHoverPreviewOpen(true)
+          }}
+        />
+        {isHoverPreviewOpen ? (
+          <div
+            className="fixed top-11 right-0 bottom-0 z-30 flex flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[-18px_0_48px_rgba(0,0,0,0.18)]"
+            style={{ width }}
+            onMouseEnter={() => setIsHoverPreviewOpen(true)}
+            onMouseLeave={() => setIsHoverPreviewOpen(false)}
+          >
+            {sidebarBody}
+          </div>
+        ) : null}
+      </>
+    )
+  }
+
+  return (
+    <SidebarShell
+      width={width}
+      setWidth={setWidth}
+      isCollapsed={isCollapsed}
+      side="right"
+      sizeConstraintClass="min-w-[300px] max-w-[560px]"
+    >
+      {sidebarHeader}
+      {sidebarBody}
     </SidebarShell>
   )
 }

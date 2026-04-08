@@ -43,7 +43,7 @@ import { getMessageAttachmentParts, getMessageTextContent } from "../domain/runt
 interface ChatMessagesProps {
   threadKey: string
   messages: MessageWithParts[]
-  status: "idle" | "streaming" | "error"
+  status: "idle" | "connecting" | "streaming" | "error"
   activePromptState?: RuntimePromptState | null
   selectedProject?: Project | null
   selectedWorktree?: ProjectWorktree | null
@@ -103,7 +103,7 @@ function dedupeMessagesByLastId(messages: MessageWithParts[]): MessageWithParts[
 
 function getTurnCollapsedMessagesByFooterId(
   messages: MessageWithParts[],
-  status: "idle" | "streaming" | "error"
+  status: "idle" | "connecting" | "streaming" | "error"
 ): Map<string, MessageWithParts[]> {
   const collapsedMessagesByFooterId = new Map<string, MessageWithParts[]>()
   const dedupedMessages = dedupeMessagesByLastId(messages)
@@ -289,7 +289,7 @@ function estimateMarkdownBlockHeight(markdown: string, widthPx: number): number 
 function estimateDisplayBlockHeight(
   preparedBlock: PreparedDisplayBlock,
   timelineWidthPx: number | null,
-  status: "idle" | "streaming" | "error",
+  status: "idle" | "connecting" | "streaming" | "error",
   latestTurnFooterMessageId: string | null,
   completedFooterByMessageId: CompletedFooterStateByMessageId
 ): number {
@@ -357,7 +357,7 @@ function estimateDisplayBlockHeight(
 
 function getFirstUnvirtualizedBlockIndex(
   preparedDisplayBlocks: PreparedDisplayBlock[],
-  status: "idle" | "streaming" | "error",
+  status: "idle" | "connecting" | "streaming" | "error",
   latestTurnFooterMessageId: string | null,
   latestTurnStreamingTextMessageId: string | null
 ): number {
@@ -499,7 +499,8 @@ export function ChatMessages({
       : latestTurnFooterMessageId === lastCompletedWork?.messageId
         ? lastCompletedWork.durationMs
         : (completedWorkDurationByMessageId.get(latestTurnFooterMessageId) ?? null)
-  const shouldRenderLatestTurnFooter = status === "streaming" && activeWorkStartTime != null
+  const shouldRenderLatestTurnFooter =
+    status === "connecting" || (status === "streaming" && activeWorkStartTime != null)
 
   const collapsedMessagesByFooterId = useMemo(
     () => getTurnCollapsedMessagesByFooterId(renderedMessages, status),
@@ -568,11 +569,9 @@ export function ChatMessages({
           ) : null}
           {shouldRenderLatestTurnFooter ? (
             <AssistantTurnFooter
-              isWorking={status === "streaming"}
-              startTime={activeWorkStartTime}
+              activityState={status === "connecting" ? "connecting" : "streaming"}
+              startTime={status === "streaming" ? activeWorkStartTime : null}
               completedDurationMs={latestTurnDurationMs ?? undefined}
-              copyText={status === "streaming" ? null : getMessageText(latestTurnFooterMessage!)}
-              changedFilesSummary={status === "streaming" ? null : latestTurnChangedFilesSummary}
             />
           ) : null}
         </>
@@ -608,7 +607,7 @@ function HybridTimelineBlocks({
   completedFooterByMessageId: CompletedFooterStateByMessageId
   latestTurnFooterMessageId: string | null
   latestTurnStreamingTextMessageId: string | null
-  status: "idle" | "streaming" | "error"
+  status: "idle" | "connecting" | "streaming" | "error"
   worktreePath?: string | null
   onOpenImagePreview?: (preview: ChatImagePreviewRequest) => void
 }) {
@@ -793,7 +792,7 @@ function DisplayBlockRow({
   completedFooterByMessageId: CompletedFooterStateByMessageId
   latestTurnFooterMessageId: string | null
   latestTurnStreamingTextMessageId: string | null
-  status: "idle" | "streaming" | "error"
+  status: "idle" | "connecting" | "streaming" | "error"
   worktreePath?: string | null
   onOpenImagePreview?: (preview: ChatImagePreviewRequest) => void
 }) {
@@ -838,7 +837,6 @@ function DisplayBlockRow({
           {completedFooterByMessageId.get(block.message.info.id) != null &&
           !(status === "streaming" && block.message.info.id === latestTurnFooterMessageId) ? (
             <AssistantTurnFooter
-              isWorking={false}
               startTime={null}
               completedDurationMs={completedFooterByMessageId.get(block.message.info.id)?.durationMs}
               copyText={getMessageText(block.message)}
@@ -861,7 +859,7 @@ function ChatAutoScroll({
 }: {
   threadKey: string
   messages: MessageWithParts[]
-  status: "idle" | "streaming" | "error"
+  status: "idle" | "connecting" | "streaming" | "error"
   onThreadPrepared: (threadKey: string) => void
 }) {
   const { scrollToBottom, state } = useStickToBottomContext()
@@ -901,25 +899,30 @@ function ChatAutoScroll({
 }
 
 function AssistantTurnFooter({
-  isWorking,
+  activityState,
   startTime,
   completedDurationMs,
   copyText,
   changedFilesSummary,
 }: {
-  isWorking: boolean
+  activityState?: "connecting" | "streaming"
   startTime: number | null
   completedDurationMs?: number
   copyText?: string | null
   changedFilesSummary?: TimelineFileChangeSummary | null
 }) {
   const [isCopied, setIsCopied] = useState(false)
+  const isConnecting = activityState === "connecting"
+  const isStreaming = activityState === "streaming"
+  const isWorking = isConnecting || isStreaming
   const elapsed = useElapsedDuration(
     startTime,
-    isWorking,
+    isStreaming,
     startTime != null && completedDurationMs != null ? startTime + completedDurationMs : undefined
   )
-  const workLabel = isWorking
+  const workLabel = isConnecting
+    ? "Connecting"
+    : isStreaming
     ? elapsed ?? formatElapsedDuration(0)
     : completedDurationMs != null && completedDurationMs > 0
       ? formatElapsedDuration(completedDurationMs)
@@ -943,7 +946,12 @@ function AssistantTurnFooter({
     <MessageComponent from="assistant">
       <MessageContent>
         <div className="mt-5 flex flex-wrap items-center gap-2 text-xs tracking-[0.01em] text-muted-foreground/80 tabular-nums">
-          {isWorking ? <LoadingDots className="shrink-0" /> : null}
+          {isWorking ? (
+            <LoadingDots
+              className="shrink-0"
+              variant={isConnecting ? "connecting" : "loading"}
+            />
+          ) : null}
           {workLabel ? <span>{workLabel}</span> : null}
           {canCopyMessage ? (
             <>
