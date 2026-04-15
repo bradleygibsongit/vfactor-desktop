@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Sidebar } from "@/components/icons"
 import { desktop, type GitPullRequest } from "@/desktop/client"
+import { CheckCircle, Folder, GitDiff, Globe } from "@/components/icons"
+import { BrowserSidebar } from "@/features/browser/components/BrowserSidebar"
 import { FileChangesList, FileChangesToolbar, FileTreeViewer, useFileChangesState } from "@/features/version-control/components"
 import { useFileTreeStore } from "@/features/workspace/store"
 import { useTabStore } from "@/features/editor/store"
@@ -14,10 +15,8 @@ import { PullRequestChecksPanel } from "./PullRequestChecksPanel"
 import { getChecksTabBadgeCount, shouldAutoOpenChecksTab } from "./pullRequestChecks"
 import { useRightSidebar } from "./useRightSidebar"
 import { SidebarShell } from "./SidebarShell"
-import { SourceControlActionGroup } from "./AppHeader"
 import { RightSidebarEmptyState } from "./RightSidebarEmptyState"
 import { LayoutGroup, motion } from "framer-motion"
-import { Button } from "@/features/shared/components/ui/button"
 import { cn } from "@/lib/utils"
 import { prewarmProjectData } from "@/features/shared/utils/prewarmProjectData"
 
@@ -26,12 +25,14 @@ interface RightSidebarProps {
 }
 
 const RIGHT_SIDEBAR_TABS: Array<{
-  key: "files" | "changes" | "checks"
+  key: "files" | "changes" | "checks" | "browser"
   label: string
+  icon: typeof Folder
 }> = [
-  { key: "files", label: "Files" },
-  { key: "changes", label: "Changes" },
-  { key: "checks", label: "Checks" },
+  { key: "files", label: "Files", icon: Folder },
+  { key: "changes", label: "Changes", icon: GitDiff },
+  { key: "checks", label: "Checks", icon: CheckCircle },
+  { key: "browser", label: "Browser", icon: Globe },
 ]
 const COLLAPSED_HOVER_TRIGGER_WIDTH = 12
 
@@ -190,7 +191,7 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
   )
 
   const handleTabIntent = useCallback(
-    (tab: "files" | "changes" | "checks") => {
+    (tab: "files" | "changes" | "checks" | "browser") => {
       void prewarmProjectData(selectedWorktreeId, selectedWorktreePath, tab)
     },
     [selectedWorktreeId, selectedWorktreePath]
@@ -215,35 +216,12 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
     return null
   }
 
-  const headerControls = (
-    <div className="flex shrink-0 items-center gap-2">
-      <SourceControlActionGroup projectPath={selectedWorktreePath} />
-      <Button
-        type="button"
-        onClick={toggle}
-        variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-        aria-label="Toggle right sidebar"
-      >
-        <Sidebar size={14} className="scale-x-[-1]" />
-      </Button>
-    </div>
-  )
-
-  const sidebarHeader = (
-    <div className="flex h-11 shrink-0 items-center border-b border-sidebar-border/70 px-3">
-      <div className="drag-region min-w-0 flex-1 self-stretch" />
-      {headerControls}
-    </div>
-  )
-
-  const sidebarBody = (
+  const renderSidebarBody = (isResizingTabs: boolean) => (
     <>
       <div className="shrink-0 px-3 py-1.5">
         <LayoutGroup id="right-sidebar-tabs">
           <div className="flex items-center gap-1">
-            {RIGHT_SIDEBAR_TABS.map(({ key, label }) => {
+            {RIGHT_SIDEBAR_TABS.map(({ key, label, icon: Icon }) => {
               const isActive = activeTab === key
 
               return (
@@ -253,7 +231,8 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
                   onClick={() => setActiveTab(key)}
                   onPointerEnter={() => handleTabIntent(key)}
                   className={cn(
-                    "relative inline-flex h-7 items-center gap-1 rounded-lg px-2 text-sm font-medium transition-colors",
+                    "group relative inline-flex h-7 items-center gap-1 rounded-md px-1.5 py-1 text-xs",
+                    !isResizingTabs && "transition-colors",
                     isActive
                       ? "text-sidebar-accent-foreground"
                       : "text-sidebar-foreground/56 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
@@ -263,14 +242,21 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
                     <motion.div
                       layoutId="rightSidebarActiveTab"
                       className="absolute inset-0 rounded-lg bg-[var(--sidebar-item-active)]"
-                      transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
+                      transition={
+                        isResizingTabs
+                          ? { duration: 0 }
+                          : { type: "spring", stiffness: 500, damping: 35, mass: 0.5 }
+                      }
                     />
                   )}
-                  <span className="relative z-10">{label}</span>
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    <Icon className="size-3.5 shrink-0" />
+                    <span>{label}</span>
+                  </span>
                   {key === "changes" && projectChanges.length > 0 ? (
                     <span
                       className={cn(
-                        "relative z-10 text-[11px] leading-none",
+                        "relative z-10 text-[10px] leading-none",
                         isActive
                           ? "text-sidebar-accent-foreground/70"
                           : "text-sidebar-foreground/40"
@@ -282,7 +268,7 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
                   {key === "checks" && checksTabBadgeCount > 0 ? (
                     <span
                       className={cn(
-                        "relative z-10 text-[11px] leading-none",
+                        "relative z-10 text-[10px] leading-none",
                         isActive
                           ? "text-sidebar-accent-foreground/70"
                           : "text-sidebar-foreground/40"
@@ -305,7 +291,14 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="app-scrollbar-sm flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-1.5">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col",
+            activeTab === "browser"
+              ? "overflow-hidden pt-1.5"
+              : "app-scrollbar-sm overflow-y-auto px-1.5 py-1.5"
+          )}
+        >
           {activeTab === "files" ? (
             isInitialLoad || isFileTreeLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -346,6 +339,8 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
                 )}
               </div>
             )
+          ) : activeTab === "browser" ? (
+            <BrowserSidebar />
           ) : activeTab === "changes" ? (
             !selectedWorktree ? (
               <RightSidebarEmptyState
@@ -413,7 +408,7 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
             onMouseEnter={() => setIsHoverPreviewOpen(true)}
             onMouseLeave={() => setIsHoverPreviewOpen(false)}
           >
-            {sidebarBody}
+            {renderSidebarBody(false)}
           </div>
         ) : null}
       </>
@@ -426,10 +421,13 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
       setWidth={setWidth}
       isCollapsed={isCollapsed}
       side="right"
-      sizeConstraintClass="min-w-[300px] max-w-[560px]"
+      sizeConstraintClass={activeTab === "browser" ? "min-w-[420px]" : "min-w-[300px]"}
     >
-      {sidebarHeader}
-      {sidebarBody}
+      {({ isResizing }) => (
+        <>
+          {renderSidebarBody(isResizing)}
+        </>
+      )}
     </SidebarShell>
   )
 }

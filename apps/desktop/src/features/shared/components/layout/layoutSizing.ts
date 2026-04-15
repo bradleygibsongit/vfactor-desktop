@@ -1,0 +1,1 @@
+export const MIN_MAIN_CONTENT_WIDTH = 405

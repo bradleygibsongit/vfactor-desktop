@@ -1,3 +1,4 @@
+import type * as React from "react"
 import type {
   AppUpdateActionResult,
   AppUpdateCheckResult,
@@ -44,6 +45,15 @@ import type {
 } from "./contracts"
 
 declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        partition?: string
+        src?: string
+      }
+    }
+  }
+
   interface Window {
     nucleus: {
       app: {

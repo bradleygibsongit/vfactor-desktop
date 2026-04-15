@@ -199,6 +199,7 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      webviewTag: true,
     },
     titleBarStyle: process.platform === "darwin" ? "hidden" : undefined,
     trafficLightPosition:

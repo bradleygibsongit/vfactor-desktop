@@ -97,7 +97,7 @@ export function TabBar({ tabs, activeTabId, onTabChange, onTabClose }: TabBarPro
 
   return (
     <div className="flex h-10 items-center border-b border-sidebar-border bg-sidebar px-2 gap-0.5">
-      <div className="flex h-full flex-1 items-center overflow-x-auto gap-0.5">
+      <div className="app-scrollbar-hidden flex h-full flex-1 items-center overflow-x-auto gap-0.5">
         <Reorder.Group
           as="div"
           axis="x"

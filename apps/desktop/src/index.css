@@ -304,6 +304,15 @@
   .app-scrollbar-sm::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  .app-scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .app-scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes composer-settle {

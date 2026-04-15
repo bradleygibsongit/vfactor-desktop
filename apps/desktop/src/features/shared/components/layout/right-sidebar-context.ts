@@ -1,6 +1,6 @@
 import { createContext } from "react"
 
-export type RightSidebarTab = "files" | "changes" | "checks"
+export type RightSidebarTab = "files" | "changes" | "checks" | "browser"
 
 export interface RightSidebarContextValue {
   isAvailable: boolean

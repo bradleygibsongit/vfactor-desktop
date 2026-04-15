@@ -2,7 +2,7 @@ import { useChatStore } from "@/features/chat/store"
 import { useProjectGitStore } from "@/features/shared/hooks/projectGitStore"
 import { useFileTreeStore } from "@/features/workspace/store"
 
-export type ProjectPrewarmTarget = "files" | "changes" | "checks"
+export type ProjectPrewarmTarget = "files" | "changes" | "checks" | "browser"
 
 const prewarmPromiseByKey = new Map<string, Promise<void>>()
 
