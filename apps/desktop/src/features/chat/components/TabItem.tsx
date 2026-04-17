@@ -101,7 +101,7 @@ export function TabItem({
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       className={cn(
-        "group relative flex items-center gap-1.5 rounded-md px-2 py-1 text-xs cursor-pointer transition-colors",
+        "group relative isolate flex items-center gap-1.5 overflow-hidden rounded-md px-2 py-1 text-xs cursor-pointer transition-colors",
         isActive
           ? "text-sidebar-accent-foreground"
           : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
@@ -110,7 +110,7 @@ export function TabItem({
       {isActive && (
         <motion.div
           layoutId="activeTab"
-          className="absolute inset-0 rounded-md bg-[var(--sidebar-item-active)]"
+          className="absolute inset-0 z-0 rounded-md bg-[var(--sidebar-item-active)]"
           transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
         />
       )}

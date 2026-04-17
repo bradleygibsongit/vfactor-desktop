@@ -138,7 +138,7 @@ export function TabBar({ tabs, activeTabId, onTabChange, onTabClose }: TabBarPro
                   cursor: "grabbing",
                 }}
                 className={cn(
-                  "cursor-grab active:cursor-grabbing",
+                  "relative isolate overflow-hidden rounded-md cursor-grab active:cursor-grabbing",
                   draggedTabId === tab.id && "opacity-65"
                 )}
                 onDragStart={() => setDraggedTabId(tab.id)}
