@@ -836,13 +836,13 @@ export function LeftSidebar({
       {isCollapsed ? (
         <>
           <div
-            className="fixed inset-y-0 left-0 z-20 hidden md:block"
+            className="fixed top-11 bottom-0 left-0 z-20 hidden md:block"
             style={{ width: COLLAPSED_HOVER_TRIGGER_WIDTH }}
             onMouseEnter={() => setIsHoverPreviewOpen(true)}
           />
           {(isHoverPreviewOpen || draggedProjectId !== null) && (
             <div
-              className="fixed inset-y-0 left-0 z-30 flex flex-col overflow-hidden border-r border-sidebar-border/70 bg-sidebar text-sidebar-foreground shadow-[0_18px_48px_rgba(0,0,0,0.18)]"
+              className="fixed top-11 bottom-0 left-0 z-30 flex flex-col overflow-hidden border-r border-sidebar-border/70 bg-sidebar text-sidebar-foreground shadow-[0_12px_28px_rgba(0,0,0,0.12)]"
               style={{ width }}
               onMouseEnter={() => setIsHoverPreviewOpen(true)}
               onMouseLeave={() => setIsHoverPreviewOpen(false)}

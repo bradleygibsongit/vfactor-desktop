@@ -404,7 +404,7 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
           />
           {isHoverPreviewOpen ? (
             <div
-              className="fixed top-11 right-0 bottom-0 z-30 flex flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[-18px_0_48px_rgba(0,0,0,0.18)]"
+              className="fixed top-11 right-0 bottom-0 z-30 flex flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[-12px_0_28px_rgba(0,0,0,0.12)]"
               style={{ width }}
               onMouseEnter={() => setIsHoverPreviewOpen(true)}
               onMouseLeave={() => setIsHoverPreviewOpen(false)}
