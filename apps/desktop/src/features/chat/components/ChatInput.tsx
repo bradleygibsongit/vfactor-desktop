@@ -1,5 +1,7 @@
 import { ArrowUp02, Brain, CaretDown, CheckCircle, Circle, DocumentValidation, Paperclip, Plus, Stop, X, Zap } from "@/components/icons"
 import { desktop } from "@/desktop/client"
+import { feedbackSurfaceClassName } from "@/features/shared/appearance"
+import { THEME_OPTIONS } from "@/features/shared/appearance"
 import {
   useState,
   useRef,
@@ -67,6 +69,7 @@ import { $isUploadChipNode, $createUploadChipNode, UploadChipNode } from "./Uplo
 import { cn } from "@/lib/utils"
 import { useCurrentProjectWorktree } from "@/features/shared/hooks"
 import { useChatStore } from "../store"
+import { createDefaultProjectChat } from "../store/sessionState"
 import { useSettingsStore } from "@/features/settings/store/settingsStore"
 import { useTabStore } from "@/features/editor/store"
 import { runCommandInProjectTerminal } from "@/features/terminal/utils/projectTerminal"
@@ -193,8 +196,15 @@ export function ChatInput({
 }: ChatInputProps) {
   const attachments = normalizeChatInputAttachments(rawAttachments)
   const { selectedProject, selectedWorktreeId, selectedWorktreePath } = useCurrentProjectWorktree()
-  const projectChat = useChatStore((state) =>
-    selectedWorktreeId ? state.getProjectChat(selectedWorktreeId) : null
+  const storedProjectChat = useChatStore((state) =>
+    selectedWorktreeId ? state.chatByWorktree[selectedWorktreeId] ?? null : null
+  )
+  const projectChat = useMemo(
+    () =>
+      selectedWorktreeId
+        ? (storedProjectChat ?? createDefaultProjectChat(selectedWorktreePath ?? undefined))
+        : null,
+    [selectedWorktreeId, selectedWorktreePath, storedProjectChat]
   )
   const createOptimisticSession = useChatStore((state) => state.createOptimisticSession)
   const setSessionHarness = useChatStore((state) => state.setSessionHarness)
@@ -203,6 +213,8 @@ export function ChatInput({
   const openChatSession = useTabStore((state) => state.openChatSession)
   const openTerminalTab = useTabStore((state) => state.openTerminalTab)
   const initializeSettings = useSettingsStore((state) => state.initialize)
+  const appearanceThemeId = useSettingsStore((state) => state.appearanceThemeId)
+  const setAppearanceThemeId = useSettingsStore((state) => state.setAppearanceThemeId)
   const codexDefaultModel = useSettingsStore((state) => state.codexDefaultModel)
   const codexDefaultReasoningEffort = useSettingsStore((state) => state.codexDefaultReasoningEffort)
   const codexDefaultFastMode = useSettingsStore((state) => state.codexDefaultFastMode)
@@ -222,6 +234,7 @@ export function ChatInput({
   const canSwitchHarnessForModelSelection = !activeSession?.id || isDraftSession
   const [isImeComposing, setIsImeComposing] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [slashMenuPage, setSlashMenuPage] = useState<"commands" | "themes">("commands")
   const [dismissedMenuKey, setDismissedMenuKey] = useState<string | null>(null)
   const [isSlashMenuDismissed, setIsSlashMenuDismissed] = useState(false)
   const [isPlanModeEnabled, setIsPlanModeEnabled] = useState(false)
@@ -492,7 +505,7 @@ export function ChatInput({
     !isPromptActive &&
     !isComposerLocked &&
     !isWorking &&
-    slashCommandQuery !== null &&
+    (slashCommandQuery !== null || slashMenuPage === "themes") &&
     !isSlashMenuDismissed
 
   const showAtMenu =
@@ -606,8 +619,14 @@ export function ChatInput({
   useEffect(() => {
     if (slashCommandQuery === null) {
       setIsSlashMenuDismissed(false)
+      setSlashMenuPage("commands")
+      return
     }
-  }, [slashCommandQuery])
+
+    if (slashMenuPage === "themes" && slashCommandQuery !== "theme") {
+      setSlashMenuPage("commands")
+    }
+  }, [slashCommandQuery, slashMenuPage])
 
   useEffect(() => {
     if (
@@ -699,13 +718,59 @@ export function ChatInput({
   // Total items in @ menu
   const atMenuTotalItems = filteredAgents.length + filteredFiles.length
 
+  useEffect(() => {
+    if (slashMenuPage !== "themes") {
+      return
+    }
+
+    const selectedThemeOption = THEME_OPTIONS[selectedIndex] ?? THEME_OPTIONS[0] ?? null
+    if (!selectedThemeOption || selectedThemeOption.id === appearanceThemeId) {
+      return
+    }
+
+    setAppearanceThemeId(selectedThemeOption.id)
+  }, [appearanceThemeId, selectedIndex, setAppearanceThemeId, slashMenuPage])
+
   // Reset selected index when filtered items change
   useEffect(() => {
+    if (slashMenuPage === "themes") {
+      return
+    }
+
     setSelectedIndex(0)
-  }, [filteredCommands.length, atMenuTotalItems])
+  }, [atMenuTotalItems, filteredCommands.length, slashMenuPage])
+
+  const openThemeSlashMenu = useCallback(() => {
+    const currentThemeIndex = THEME_OPTIONS.findIndex((option) => option.id === appearanceThemeId)
+    setDismissedMenuKey(null)
+    setIsSlashMenuDismissed(false)
+    setSlashMenuPage("themes")
+    setInput("/theme")
+    setSelectedIndex(currentThemeIndex >= 0 ? currentThemeIndex : 0)
+    suppressNextSubmitRef.current = true
+    requestAnimationFrame(() => {
+      focusComposer()
+    })
+  }, [appearanceThemeId, focusComposer, setInput])
+
+  const handleSelectThemeOption = useCallback(
+    (themeId: (typeof THEME_OPTIONS)[number]["id"], index: number) => {
+      setSelectedIndex(index)
+      setAppearanceThemeId(themeId)
+      requestAnimationFrame(() => {
+        focusComposer()
+      })
+    },
+    [focusComposer, setAppearanceThemeId]
+  )
 
   const runSystemSlashCommand = useCallback(
     (command: NormalizedCommand) => {
+      if (command.action === "theme") {
+        openThemeSlashMenu()
+        return
+      }
+
       if (command.action === "new-chat") {
         if (!selectedWorktreeId || !selectedWorktreePath) {
           return
@@ -759,6 +824,7 @@ export function ChatInput({
     [
       createOptimisticSession,
       openTerminalTab,
+      openThemeSlashMenu,
       openChatSession,
       selectedProject,
       selectedWorktreeId,
@@ -1045,6 +1111,16 @@ export function ChatInput({
   const closeSlashMenu = useCallback(() => {
     setIsSlashMenuDismissed(true)
   }, [])
+
+  const finalizeThemeSlashMenu = useCallback(() => {
+    setSlashMenuPage("commands")
+    setInput("")
+    setDismissedMenuKey(null)
+    setIsSlashMenuDismissed(true)
+    requestAnimationFrame(() => {
+      focusComposer()
+    })
+  }, [focusComposer, setInput])
 
   const closeAtMenu = useCallback(() => {
     if (atMenuKey) {
@@ -1347,6 +1423,10 @@ export function ChatInput({
         : null
 
       if (activeSlashCommandQuery !== null) {
+        if (slashMenuPage === "themes") {
+          return
+        }
+
         const selectedCommand = filteredCommands[selectedIndex] ?? filteredCommands[0]
         if (selectedCommand) {
           handleSelectCommand(selectedCommand)
@@ -1471,17 +1551,20 @@ export function ChatInput({
       }
 
       if (showSlashMenu) {
+        const slashMenuItemsCount =
+          slashMenuPage === "themes" ? THEME_OPTIONS.length : filteredCommands.length
+
         if (e.key === "ArrowDown") {
           e.preventDefault()
           setSelectedIndex((prev) =>
-            prev < filteredCommands.length - 1 ? prev + 1 : 0
+            prev < slashMenuItemsCount - 1 ? prev + 1 : 0
           )
           return
         }
         if (e.key === "ArrowUp") {
           e.preventDefault()
           setSelectedIndex((prev) =>
-            prev > 0 ? prev - 1 : filteredCommands.length - 1
+            prev > 0 ? prev - 1 : slashMenuItemsCount - 1
           )
           return
         }
@@ -1489,6 +1572,19 @@ export function ChatInput({
           e.preventDefault()
           closeSlashMenu()
           return
+        }
+        if (slashMenuPage === "themes") {
+          if (e.key === "Tab") {
+            e.preventDefault()
+            e.stopPropagation()
+            return
+          }
+          if (e.key === "Enter" && !e.shiftKey && !isImeComposing) {
+            e.preventDefault()
+            e.stopPropagation()
+            finalizeThemeSlashMenu()
+            return
+          }
         }
         if (e.key === "Tab") {
           e.preventDefault()
@@ -1552,10 +1648,12 @@ export function ChatInput({
       isComposerLocked,
       isPromptActive,
       showSlashMenu,
+      slashMenuPage,
       slashCommandQuery,
       filteredCommands,
       selectedIndex,
       closeSlashMenu,
+      finalizeThemeSlashMenu,
       handleSelectCommand,
       showAtMenu,
       atMenuTotalItems,
@@ -1563,6 +1661,7 @@ export function ChatInput({
       filteredFiles,
       closeAtMenu,
       deleteAdjacentChip,
+      isImeComposing,
     ]
   )
 
@@ -1758,7 +1857,7 @@ export function ChatInput({
     <form
       onSubmit={handleSubmit}
       className={cn(
-        placement === "intro" ? "w-full bg-transparent px-0 pb-0" : "bg-main-content px-6 pb-3"
+        placement === "intro" ? "w-full bg-transparent px-0 pb-0" : "chat-main-surface px-6 pb-3"
       )}
       aria-busy={isComposerLocked}
     >
@@ -1772,13 +1871,13 @@ export function ChatInput({
       <div
         ref={composerMenuAnchorRef}
         className={cn(
-          "relative overflow-hidden border bg-card shadow-sm",
+          "chat-composer-shell relative overflow-hidden border shadow-sm",
           placement === "intro" ? "rounded-xl" : "rounded-2xl",
           isApprovalComposerState
             ? "border-[var(--color-chat-approval-border)] bg-[var(--color-chat-approval-surface)]"
             : isPlanModeEnabled
               ? "border-[var(--color-chat-plan-border)] bg-[var(--color-chat-plan-surface)] shadow-[0_0_0_1px_var(--color-chat-plan-border)]"
-            : "border-border"
+            : "border-transparent"
         )}
       >
         {activePlan && (
@@ -1903,14 +2002,26 @@ export function ChatInput({
 
               {showSlashMenu ? (
                 <ComposerFloatingOverlay anchorRef={composerMenuAnchorRef}>
-                  <SlashCommandMenu
-                    commands={filteredCommands}
-                    query={slashCommandQuery ?? ""}
-                    isLoading={isLoadingCommands}
-                    onSelect={handleSelectCommand}
-                    onClose={closeSlashMenu}
-                    selectedIndex={selectedIndex}
-                  />
+                  {slashMenuPage === "themes" ? (
+                    <SlashCommandMenu
+                      page="themes"
+                      themes={THEME_OPTIONS}
+                      activeThemeId={appearanceThemeId}
+                      onSelectTheme={handleSelectThemeOption}
+                      onClose={closeSlashMenu}
+                      selectedIndex={selectedIndex}
+                    />
+                  ) : (
+                    <SlashCommandMenu
+                      page="commands"
+                      commands={filteredCommands}
+                      query={slashCommandQuery ?? ""}
+                      isLoading={isLoadingCommands}
+                      onSelect={handleSelectCommand}
+                      onClose={closeSlashMenu}
+                      selectedIndex={selectedIndex}
+                    />
+                  )}
                 </ComposerFloatingOverlay>
               ) : null}
 
@@ -1932,7 +2043,7 @@ export function ChatInput({
           )}
 
           {!isPromptActive && !isComposerLocked && uploadError ? (
-            <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+            <div className={cn(feedbackSurfaceClassName("destructive"), "mt-3 rounded-lg px-3 py-2 text-sm")}>
               {uploadError}
             </div>
           ) : null}
@@ -1973,7 +2084,7 @@ export function ChatInput({
                           onClick={toggleFastMode}
                           className="flex items-center gap-2"
                         >
-                          <Zap className="size-4 text-amber-500 dark:text-amber-300" />
+                          <Zap className="size-4 text-[color:var(--color-warning)]" />
                           <span className="flex-1">Fast mode</span>
                           {fastMode ? <CheckCircle className="size-3.5 text-muted-foreground" /> : null}
                         </DropdownMenuItem>
@@ -2010,7 +2121,7 @@ export function ChatInput({
                 title={selectedModelLabel}
               >
                 {fastMode && supportsFastMode ? (
-                  <Zap className="size-[18px] shrink-0 text-amber-500 dark:text-amber-300" />
+                  <Zap className="size-[18px] shrink-0 text-[color:var(--color-warning)]" />
                 ) : (
                   <ModelLogo kind={selectedModelLogoKind} className="size-[18px] shrink-0" />
                 )}

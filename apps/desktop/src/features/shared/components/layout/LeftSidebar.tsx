@@ -9,7 +9,6 @@ import {
   GitPullRequest,
   Plus,
   FolderSimplePlus,
-  Sidebar,
 } from "@/components/icons"
 import {
   DropdownMenu,
@@ -37,7 +36,6 @@ import { openFolderPicker } from "@/features/workspace/utils/folderDialog"
 import { useSidebar } from "./useSidebar"
 import { useRightSidebar } from "./useRightSidebar"
 import { SidebarShell } from "./SidebarShell"
-import { Button } from "@/features/shared/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Project, ProjectWorktree } from "@/features/workspace/types"
 import {
@@ -65,8 +63,6 @@ interface LeftSidebarProps {
   onSelectSettingsSection?: (section: SettingsSectionId) => void
 }
 
-const WINDOW_CONTROLS_GUTTER_WIDTH = 80
-const DESKTOP_LEFT_TOGGLE_OFFSET = WINDOW_CONTROLS_GUTTER_WIDTH + 12
 const COLLAPSED_HOVER_TRIGGER_WIDTH = 12
 
 function haveProjectIdsChangedOrder(nextProjectIds: string[], currentProjects: Project[]) {
@@ -139,7 +135,7 @@ export function LeftSidebar({
   } | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([])
-  const { isCollapsed, width, setWidth, toggle } = useSidebar()
+  const { isCollapsed, width, setWidth, expand } = useSidebar()
   const { activeTab: rightSidebarActiveTab, isCollapsed: isRightSidebarCollapsed } = useRightSidebar()
   const {
     projects,
@@ -308,6 +304,12 @@ export function LeftSidebar({
       setIsHoverPreviewOpen(false)
     }
   }, [isCollapsed, isHoverPreviewOpen])
+
+  useEffect(() => {
+    if (activeView === "settings" && isCollapsed) {
+      expand()
+    }
+  }, [activeView, expand, isCollapsed])
 
   const expandedReadyWorktreePaths = useMemo(
     () =>
@@ -655,32 +657,6 @@ export function LeftSidebar({
     )
   }
 
-  const sidebarHeader = (
-    <div className="relative hidden h-11 shrink-0 items-center border-b border-sidebar-border/70 px-3 md:flex">
-      <div
-        className="drag-region h-full shrink-0"
-        style={{ width: WINDOW_CONTROLS_GUTTER_WIDTH }}
-        aria-hidden="true"
-      />
-      <div
-        className="absolute top-1/2 z-10 -translate-y-1/2"
-        style={{ left: DESKTOP_LEFT_TOGGLE_OFFSET }}
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={toggle}
-          className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-          aria-label="Toggle left sidebar"
-        >
-          <Sidebar size={14} />
-        </Button>
-      </div>
-      <div className="size-7 shrink-0" aria-hidden="true" />
-    </div>
-  )
-
   const sidebarBody = (
     <>
       {/* Body */}
@@ -803,86 +779,8 @@ export function LeftSidebar({
     </>
   )
 
-  if (isCollapsed) {
-    return (
-      <>
-        <div
-          className="fixed inset-y-0 left-0 z-30"
-          style={{ width: COLLAPSED_HOVER_TRIGGER_WIDTH }}
-          onMouseEnter={() => setIsHoverPreviewOpen(true)}
-        />
-        {(isHoverPreviewOpen || draggedProjectId !== null) && (
-          <div
-            className="fixed top-11 bottom-0 left-0 z-30 flex flex-col overflow-hidden border-r border-sidebar-border/70 bg-sidebar text-sidebar-foreground shadow-[0_18px_48px_rgba(0,0,0,0.18)]"
-            style={{ width }}
-            onMouseEnter={() => setIsHoverPreviewOpen(true)}
-            onMouseLeave={() => setIsHoverPreviewOpen(false)}
-          >
-            {sidebarBody}
-          </div>
-        )}
-
-        <NewWorkspaceModal
-          open={newWorkspaceModalProject !== null}
-          project={newWorkspaceModalProject}
-          onOpenChange={(open) => {
-            if (!open) {
-              setNewWorkspaceModalProject(null)
-            }
-          }}
-          onContinue={async (input) => {
-            if (!newWorkspaceModalProject) {
-              return
-            }
-
-            await handleContinueNewWorkspace({
-              project: newWorkspaceModalProject,
-              prompt: input.prompt,
-            })
-          }}
-        />
-        <ProjectSettingsModal
-          open={projectSettingsProject !== null}
-          project={projectSettingsProject}
-          onOpenChange={(open) => {
-            if (!open) {
-              setProjectSettingsProject(null)
-            }
-          }}
-        />
-        <RemoveProjectModal
-          open={projectPendingRemoval !== null}
-          project={projectPendingRemoval}
-          onOpenChange={(open) => {
-            if (!open) {
-              setProjectPendingRemoval(null)
-            }
-          }}
-        />
-        <RemoveWorktreeModal
-          open={worktreePendingRemoval !== null}
-          project={worktreePendingRemoval?.project ?? null}
-          worktree={worktreePendingRemoval?.worktree ?? null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setWorktreePendingRemoval(null)
-            }
-          }}
-        />
-      </>
-    )
-  }
-
-  return (
-    <SidebarShell
-      width={width}
-      setWidth={setWidth}
-      isCollapsed={isCollapsed}
-      side="left"
-      sizeConstraintClass="min-w-[240px] max-w-[420px]"
-    >
-      {sidebarHeader}
-      {sidebarBody}
+  const sidebarModals = (
+    <>
       <NewWorkspaceModal
         open={newWorkspaceModalProject !== null}
         project={newWorkspaceModalProject}
@@ -930,6 +828,45 @@ export function LeftSidebar({
           }
         }}
       />
-    </SidebarShell>
+    </>
+  )
+
+  return (
+    <>
+      {isCollapsed ? (
+        <>
+          <div
+            className="fixed inset-y-0 left-0 z-20 hidden md:block"
+            style={{ width: COLLAPSED_HOVER_TRIGGER_WIDTH }}
+            onMouseEnter={() => setIsHoverPreviewOpen(true)}
+          />
+          {(isHoverPreviewOpen || draggedProjectId !== null) && (
+            <div
+              className="fixed inset-y-0 left-0 z-30 flex flex-col overflow-hidden border-r border-sidebar-border/70 bg-sidebar text-sidebar-foreground shadow-[0_18px_48px_rgba(0,0,0,0.18)]"
+              style={{ width }}
+              onMouseEnter={() => setIsHoverPreviewOpen(true)}
+              onMouseLeave={() => setIsHoverPreviewOpen(false)}
+            >
+              {sidebarBody}
+            </div>
+          )}
+        </>
+      ) : null}
+
+      <SidebarShell
+        width={width}
+        setWidth={setWidth}
+        isCollapsed={isCollapsed}
+        side="left"
+        sizeConstraintClass="min-w-[240px] max-w-[420px]"
+        collapsedWidth={0}
+        animateWidth={false}
+      >
+        <>
+          {sidebarBody}
+        </>
+      </SidebarShell>
+      {sidebarModals}
+    </>
   )
 }

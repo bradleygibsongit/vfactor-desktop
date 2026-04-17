@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
 } from "@/features/shared/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { desktop } from "@/desktop/client";
 import type { FileUIPart, UIMessage } from "ai";
 import {
   CaretLeft,
@@ -18,7 +19,7 @@ import {
   Paperclip,
   X,
 } from "@/components/icons";
-import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
+import type { ComponentProps, HTMLAttributes, MouseEvent, ReactElement } from "react";
 import {
   createContext,
   memo,
@@ -29,6 +30,43 @@ import {
 } from "react";
 import { Streamdown } from "streamdown";
 
+function shouldOpenExternally(href: string | undefined): href is string {
+  if (!href) {
+    return false;
+  }
+
+  return /^(https?:|mailto:|tel:)/i.test(href);
+}
+
+function MarkdownLink({
+  children,
+  href,
+  onClick,
+  ...props
+}: ComponentProps<"a">) {
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    onClick?.(event);
+    if (event.defaultPrevented || !shouldOpenExternally(href)) {
+      return;
+    }
+
+    event.preventDefault();
+    void desktop.shell.openExternal(href);
+  };
+
+  return (
+    <a
+      href={href}
+      target={shouldOpenExternally(href) ? "_blank" : props.target}
+      rel={shouldOpenExternally(href) ? "noreferrer" : props.rel}
+      onClick={handleClick}
+      {...props}
+    >
+      {children}
+    </a>
+  );
+}
+
 const MARKDOWN_COMPONENTS = {
   p: ({ children, className, ...props }: ComponentProps<"p">) => (
     <p
@@ -38,6 +76,7 @@ const MARKDOWN_COMPONENTS = {
       {children}
     </p>
   ),
+  a: MarkdownLink,
 };
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -66,7 +105,7 @@ export const MessageContent = ({
   <div
     className={cn(
       "flex w-full min-w-0 flex-col gap-4 overflow-hidden text-sm text-foreground",
-      "group-[.is-user]:w-auto group-[.is-user]:max-w-[min(42rem,78%)] group-[.is-user]:self-end group-[.is-user]:gap-0 group-[.is-user]:rounded-[18px] group-[.is-user]:bg-[#262626] group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-sm group-[.is-user]:leading-6 group-[.is-user]:text-white",
+      "group-[.is-user]:w-auto group-[.is-user]:max-w-[min(42rem,78%)] group-[.is-user]:self-end group-[.is-user]:gap-0 group-[.is-user]:rounded-[18px] group-[.is-user]:bg-[color:var(--color-message-user-bubble)] group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-sm group-[.is-user]:leading-6 group-[.is-user]:text-[color:var(--color-message-user-bubble-foreground)]",
       className
     )}
     {...props}

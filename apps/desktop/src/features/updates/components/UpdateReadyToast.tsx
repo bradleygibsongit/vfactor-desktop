@@ -1,5 +1,6 @@
 import { Refresh, X } from "@/components/icons"
 import { desktop } from "@/desktop/client"
+import { feedbackSurfaceClassName } from "@/features/shared/appearance"
 import { Button } from "@/features/shared/components/ui/button"
 import { useAppUpdateStore } from "@/features/updates/store/updateStore"
 import { cn } from "@/lib/utils"
@@ -53,7 +54,7 @@ export function UpdateReadyToast() {
       <div
         className={cn(
           "pointer-events-auto overflow-hidden rounded-xl border bg-card/97 shadow-lg backdrop-blur-sm",
-          showRetryableError ? "border-amber-400/40" : "border-border/70"
+          showRetryableError ? "border-[color:var(--color-warning-border)]" : "border-border/70"
         )}
       >
         {/* Downloading state: slim bar with progress */}
@@ -120,7 +121,7 @@ export function UpdateReadyToast() {
         {showRetryableError ? (
           <div className="px-3 py-2.5">
             <div className="flex items-center justify-between gap-2">
-              <p className="min-w-0 text-xs font-medium text-amber-600">
+              <p className="min-w-0 text-xs font-medium text-[color:var(--color-warning)]">
                 {isInstallError ? "Restart failed" : "Download failed"}
               </p>
               <DismissButton onClick={() => void dismissUpdate()} />

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import type { GitFileChange } from "@/desktop/client"
 import { CheckCircle, Circle, CircleNotch } from "@/components/icons"
+import { feedbackSurfaceClassName, vcsTextClassNames } from "@/features/shared/appearance"
 import { Button } from "@/features/shared/components/ui/button"
 import {
   Dialog,
@@ -42,15 +43,15 @@ function getStatusClasses(change: GitFileChange): string {
     case "added":
     case "untracked":
     case "copied":
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      return feedbackSurfaceClassName("success")
     case "deleted":
-      return "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+      return feedbackSurfaceClassName("destructive")
     case "renamed":
-      return "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+      return feedbackSurfaceClassName("info")
     case "ignored":
       return "border-border/70 bg-muted text-muted-foreground"
     default:
-      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      return feedbackSurfaceClassName("warning")
   }
 }
 
@@ -101,7 +102,7 @@ export function CommitChangesDialog({
           <DialogTitle>
             Commit changes
             {isDefaultBranch ? (
-              <span className="ml-2 inline-block align-middle rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              <span className="ml-2 inline-block align-middle rounded-full border border-[color:var(--color-warning-border)] bg-[color:var(--color-warning-surface)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-warning-surface-foreground)]">
                 {currentBranch}
               </span>
             ) : (
@@ -162,7 +163,7 @@ export function CommitChangesDialog({
                             className={cn(
                               "flex size-4 shrink-0 items-center justify-center",
                               isSelected
-                                ? "text-emerald-700 dark:text-emerald-300"
+                                ? vcsTextClassNames.added
                                 : "text-muted-foreground"
                             )}
                           >
@@ -185,11 +186,11 @@ export function CommitChangesDialog({
                           </span>
 
                           <span className="shrink-0 text-xs text-muted-foreground">
-                            <span className="text-emerald-700 dark:text-emerald-300">
+                            <span className={vcsTextClassNames.added}>
                               +{change.additions ?? 0}
                             </span>
                             <span className="px-0.5">/</span>
-                            <span className="text-rose-700 dark:text-rose-300">
+                            <span className={vcsTextClassNames.deleted}>
                               -{change.deletions ?? 0}
                             </span>
                           </span>

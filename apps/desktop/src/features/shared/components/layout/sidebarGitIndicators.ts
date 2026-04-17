@@ -34,14 +34,14 @@ export function resolveSidebarBranchIndicator(
 
   if (branchData.isDetached) {
     return {
-      colorClass: "text-rose-500 dark:text-rose-300/90",
+      colorClass: "text-[color:var(--color-vcs-diverged)]",
       tooltip: "Detached HEAD",
     }
   }
 
   if (isAhead && isBehind) {
     return {
-      colorClass: "text-rose-500 dark:text-rose-300/90",
+      colorClass: "text-[color:var(--color-vcs-diverged)]",
       tooltip: `${branchLabel} has diverged from ${upstreamLabel} (${formatCommitCount(
         branchData.aheadCount
       )} ahead, ${formatCommitCount(branchData.behindCount)} behind).`,
@@ -50,21 +50,21 @@ export function resolveSidebarBranchIndicator(
 
   if (changedFiles > 0) {
     return {
-      colorClass: "text-amber-500 dark:text-amber-300/90",
+      colorClass: "text-[color:var(--color-vcs-modified)]",
       tooltip: `${branchLabel} has ${formatChangeCount(changedFiles)}.`,
     }
   }
 
   if (isBehind) {
     return {
-      colorClass: "text-sky-500 dark:text-sky-300/90",
+      colorClass: "text-[color:var(--color-vcs-behind)]",
       tooltip: `${branchLabel} is ${formatCommitCount(branchData.behindCount)} behind ${upstreamLabel}.`,
     }
   }
 
   if (isAhead) {
     return {
-      colorClass: "text-emerald-500 dark:text-emerald-300/90",
+      colorClass: "text-[color:var(--color-vcs-ahead)]",
       tooltip: branchData.hasUpstream
         ? `${branchLabel} is ${formatCommitCount(branchData.aheadCount)} ahead of ${upstreamLabel}.`
         : `${branchLabel} is ${formatCommitCount(branchData.aheadCount)} ahead with no upstream configured yet.`,
@@ -96,7 +96,7 @@ export function resolveSidebarPullRequestIndicator(
 
   if (pullRequest.state === "open") {
     return {
-      colorClass: "text-emerald-500 dark:text-emerald-300/90",
+      colorClass: "text-[color:var(--color-vcs-pr-open)]",
       tooltip: `PR #${pullRequest.number} open: ${pullRequest.title}`,
       url: pullRequest.url,
     }
@@ -104,14 +104,14 @@ export function resolveSidebarPullRequestIndicator(
 
   if (pullRequest.state === "closed") {
     return {
-      colorClass: "text-zinc-500 dark:text-zinc-400/80",
+      colorClass: "text-[color:var(--color-vcs-pr-closed)]",
       tooltip: `PR #${pullRequest.number} closed: ${pullRequest.title}`,
       url: pullRequest.url,
     }
   }
 
   return {
-    colorClass: "text-violet-500 dark:text-violet-300/90",
+    colorClass: "text-[color:var(--color-vcs-merged)]",
     tooltip: `PR #${pullRequest.number} merged: ${pullRequest.title}`,
     url: pullRequest.url,
   }

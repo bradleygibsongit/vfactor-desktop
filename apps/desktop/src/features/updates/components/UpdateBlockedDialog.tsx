@@ -10,6 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/features/shared/components/ui/alert-dialog"
 import { Clock } from "@/components/icons"
+import { feedbackIconClassName } from "@/features/shared/appearance"
 import { useAppUpdateStore } from "@/features/updates/store/updateStore"
 
 export function UpdateBlockedDialog() {
@@ -32,7 +33,7 @@ export function UpdateBlockedDialog() {
     >
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogMedia className="bg-amber-500/12 text-amber-600">
+          <AlertDialogMedia className={feedbackIconClassName("warning") + " bg-[color:var(--color-warning-surface)]"}>
             <Clock size={18} />
           </AlertDialogMedia>
           <AlertDialogTitle>Restart anyway?</AlertDialogTitle>

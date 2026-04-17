@@ -281,7 +281,7 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
           </div>
 
           {errorMessage ? (
-            <div className="border-t border-sidebar-border px-3 py-2 text-sm text-[#F08BA7]">
+            <div className="border-t border-sidebar-border px-3 py-2 text-sm text-[color:var(--color-destructive)]">
               {errorMessage}
             </div>
           ) : statusMessage ? (

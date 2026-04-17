@@ -1,3 +1,4 @@
+import { type CSSProperties } from "react"
 import { Sidebar } from "@/components/icons"
 import { SourceControlActionGroup } from "./AppHeader"
 import { BranchTargetSelector } from "./BranchTargetSelector"
@@ -9,20 +10,17 @@ import { cn } from "@/lib/utils"
 import { useProjectStore } from "@/features/workspace/store"
 import { ProjectActionsControl } from "@/features/workspace/components/ProjectActionsControl"
 import { prewarmProjectData } from "@/features/shared/utils/prewarmProjectData"
+import { DESKTOP_LEFT_TOGGLE_OFFSET } from "./layoutSizing"
 
 interface CenterToolbarProps {
   activeView?: "chat" | "settings" | "automations"
 }
 
-const WINDOW_CONTROLS_GUTTER_WIDTH = 80
-const DESKTOP_LEFT_TOGGLE_OFFSET = WINDOW_CONTROLS_GUTTER_WIDTH + 12
-const COLLAPSED_LEFT_TOGGLE_WIDTH = 28
-const COLLAPSED_BRANCH_GAP = 8
-const COLLAPSED_BRANCH_OFFSET =
-  DESKTOP_LEFT_TOGGLE_OFFSET + COLLAPSED_LEFT_TOGGLE_WIDTH + COLLAPSED_BRANCH_GAP - 16
+const noDragStyle: CSSProperties = { WebkitAppRegion: "no-drag" }
+const dragStyle: CSSProperties = { WebkitAppRegion: "drag" }
 
 export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
-  const { isCollapsed, toggle: toggleLeft } = useSidebar()
+  const { isCollapsed: isLeftCollapsed, toggle: toggleLeft } = useSidebar()
   const {
     isAvailable: isRightSidebarAvailable,
     isCollapsed: isRightCollapsed,
@@ -38,10 +36,25 @@ export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
 
   const canToggleRightSidebar =
     activeView === "chat" && isRightSidebarAvailable && !isNewWorkspaceSetupActive
-  const collapsedBranchOffset = isCollapsed && activeView === "chat" ? COLLAPSED_BRANCH_OFFSET : 0
   const handleRightSidebarIntent = () => {
     void prewarmProjectData(activeWorktreeId, activeWorktreePath, rightSidebarActiveTab)
   }
+  const leftToggleButton = (
+    <Button
+      type="button"
+      onClick={toggleLeft}
+      variant="ghost"
+      size="icon-sm"
+      className={cn(
+        "text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-sidebar-accent hover:text-foreground active:scale-[0.97]",
+        !isLeftCollapsed && "bg-sidebar-accent/60 text-foreground"
+      )}
+      style={noDragStyle}
+      aria-label="Toggle left sidebar"
+    >
+      <Sidebar size={14} />
+    </Button>
+  )
 
   return (
     <div
@@ -49,33 +62,19 @@ export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
         "relative flex h-11 shrink-0 select-none border-b border-sidebar-border/70 bg-sidebar",
         activeView === "chat" && "text-foreground",
       )}
+      style={{
+        ...dragStyle,
+        ["--desktop-left-toggle-offset" as string]: `${DESKTOP_LEFT_TOGGLE_OFFSET}px`,
+      }}
     >
-      {/* Desktop: left sidebar toggle when the left sidebar is collapsed */}
-      {isCollapsed ? (
-        <div
-          className="absolute top-1/2 z-10 hidden -translate-y-1/2 items-center gap-2 md:flex"
-          style={{ left: DESKTOP_LEFT_TOGGLE_OFFSET }}
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={toggleLeft}
-            className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-            aria-label="Toggle left sidebar"
-          >
-            <Sidebar size={14} />
-          </Button>
+      <div className="pointer-events-none flex h-full w-full items-center gap-3 px-3 md:pl-[var(--desktop-left-toggle-offset)]">
+        <div className="pointer-events-auto flex shrink-0 items-center" style={noDragStyle}>
+          {leftToggleButton}
         </div>
-      ) : null}
 
-      {/* Center content */}
-      <div className="flex h-full min-w-0 flex-1 items-center">
         <div
-          className={cn(
-            "hidden h-full min-w-0 shrink-0 items-center gap-3 pl-4 md:flex",
-          )}
-          style={collapsedBranchOffset > 0 ? { marginLeft: collapsedBranchOffset } : undefined}
+          className="pointer-events-auto hidden min-w-0 shrink-0 items-center md:flex"
+          style={noDragStyle}
         >
           {activeView === "chat" && !isNewWorkspaceSetupActive ? (
             <BranchTargetSelector
@@ -85,9 +84,14 @@ export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
             />
           ) : null}
         </div>
-        <div className="drag-region min-w-0 flex-1 self-stretch" />
+
+        <div className="min-w-0 flex-1" />
+
         {activeView === "chat" && !isNewWorkspaceSetupActive ? (
-          <div className="hidden shrink-0 items-center gap-2 pr-3 md:flex">
+          <div
+            className="pointer-events-auto hidden shrink-0 items-center gap-2 md:flex"
+            style={noDragStyle}
+          >
             {activeWorktreePath ? <ProjectActionsControl /> : null}
             {activeWorktreePath ? <SourceControlActionGroup /> : null}
             {canToggleRightSidebar ? (
@@ -101,6 +105,7 @@ export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
                   "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
                   !isRightCollapsed && "bg-sidebar-accent text-foreground"
                 )}
+                style={noDragStyle}
                 aria-label="Toggle right sidebar"
               >
                 <Sidebar size={14} className="scale-x-[-1]" />
@@ -108,33 +113,23 @@ export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
             ) : null}
           </div>
         ) : null}
-      </div>
 
-      {/* Mobile controls */}
-      <div className="flex shrink-0 items-center gap-1 px-3 md:hidden">
-        <Button
-          type="button"
-          onClick={toggleLeft}
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground md:hidden"
-          aria-label="Toggle left sidebar"
-        >
-          <Sidebar size={14} />
-        </Button>
-        {canToggleRightSidebar ? (
-          <Button
-            type="button"
-            onClick={toggleRight}
-            onPointerEnter={handleRightSidebarIntent}
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-            aria-label="Toggle right sidebar"
-          >
-            <Sidebar size={14} className="scale-x-[-1]" />
-          </Button>
-        ) : null}
+        <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1 md:hidden" style={noDragStyle}>
+          {canToggleRightSidebar ? (
+            <Button
+              type="button"
+              onClick={toggleRight}
+              onPointerEnter={handleRightSidebarIntent}
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              style={noDragStyle}
+              aria-label="Toggle right sidebar"
+            >
+              <Sidebar size={14} className="scale-x-[-1]" />
+            </Button>
+          ) : null}
+        </div>
       </div>
     </div>
   )

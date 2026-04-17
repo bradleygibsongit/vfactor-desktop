@@ -1,6 +1,7 @@
 import type { Icon } from "@/components/icons"
 import {
   CaretLeft,
+  Eye,
   GitBranch,
   Refresh,
 } from "@/components/icons"
@@ -9,6 +10,7 @@ import type { HarnessId } from "@/features/chat/types"
 import type { ModelLogoKind } from "@/features/chat/components/ModelLogo"
 
 export type SettingsSectionId =
+  | "appearance"
   | "git"
   | "updates"
   | HarnessId
@@ -32,6 +34,7 @@ export const SETTINGS_SECTION_GROUPS: SettingsSectionGroup[] = [
   {
     id: "general",
     sections: [
+      { id: "appearance", label: "Appearance", icon: Eye },
       { id: "git", label: "Git", icon: GitBranch },
       { id: "updates", label: "Updates", icon: Refresh },
     ],

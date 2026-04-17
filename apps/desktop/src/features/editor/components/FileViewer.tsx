@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import Editor from "@monaco-editor/react"
 import { desktop } from "@/desktop/client"
 import { getLanguageFromFilename } from "../utils/language"
-import { useTheme } from "@/features/shared/hooks"
+import { registerMonacoThemes, useAppearance } from "@/features/shared/appearance"
 
 interface FileViewerProps {
   filename: string
@@ -14,7 +14,7 @@ export function FileViewer({ filename, filePath }: FileViewerProps) {
   const [showLoading, setShowLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const language = getLanguageFromFilename(filename)
-  const theme = useTheme()
+  const { monacoThemeId } = useAppearance()
 
   useEffect(() => {
     let loadingTimeout: ReturnType<typeof setTimeout> | null = null
@@ -77,7 +77,10 @@ export function FileViewer({ filename, filePath }: FileViewerProps) {
       height="100%"
       language={language}
       value={content}
-      theme={theme}
+      theme={monacoThemeId}
+      beforeMount={(monaco) => {
+        registerMonacoThemes(monaco)
+      }}
       options={{
         readOnly: true,
         minimap: { enabled: false },

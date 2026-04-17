@@ -12,8 +12,8 @@ export interface NormalizedCommand {
   kind: "builtin" | "custom"
   section: "actions" | "custom-actions" | "commands" | "skills"
   execution: "insert" | "run"
-  action?: "new-chat" | "new-terminal"
-  icon?: "skill" | "command" | "new-chat" | "new-terminal"
+  action?: "new-chat" | "new-terminal" | "theme"
+  icon?: "skill" | "command" | "new-chat" | "new-terminal" | "theme"
   agent?: string
   model?: string
   isPreview?: boolean
@@ -43,6 +43,16 @@ const ACTION_COMMANDS: NormalizedCommand[] = [
     execution: "run",
     action: "new-terminal",
     icon: "new-terminal",
+  },
+  {
+    id: "action:theme",
+    name: "Theme",
+    description: "Browse and switch the desktop app theme.",
+    kind: "builtin",
+    section: "actions",
+    execution: "run",
+    action: "theme",
+    icon: "theme",
   },
 ]
 

@@ -49,7 +49,7 @@ function TabIcon({
             "block rounded-full",
             activityStatus === "error"
               ? "size-2 bg-destructive"
-              : "size-2 bg-amber-400"
+              : "size-2 bg-[color:var(--color-warning)]"
           )}
           aria-hidden="true"
         />
@@ -110,7 +110,7 @@ export function TabItem({
       {isActive && (
         <motion.div
           layoutId="activeTab"
-          className="absolute inset-0 rounded-md bg-sidebar-accent"
+          className="absolute inset-0 rounded-md bg-[var(--sidebar-item-active)]"
           transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
         />
       )}

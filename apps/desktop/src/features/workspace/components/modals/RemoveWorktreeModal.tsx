@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { InformationCircle, Trash } from "@/components/icons"
 import { desktop } from "@/desktop/client"
+import { feedbackIconClassName, feedbackSurfaceClassName } from "@/features/shared/appearance"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -144,9 +145,9 @@ export function RemoveWorktreeModal({
           </div>
 
           {hasUncommittedChanges ? (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-left">
-              <InformationCircle className="mt-0.5 size-4 shrink-0 text-amber-700" />
-              <p className="text-xs leading-5 text-amber-900 dark:text-amber-200">
+            <div className={cn(feedbackSurfaceClassName("warning"), "flex items-start gap-2 rounded-lg px-3 py-2.5 text-left")}>
+              <InformationCircle className={cn("mt-0.5 size-4 shrink-0", feedbackIconClassName("warning"))} />
+              <p className="text-xs leading-5">
                 {deleteIsBlocked
                   ? "Can't delete from system while this workspace has uncommitted changes."
                   : "This workspace has uncommitted changes."}
@@ -164,9 +165,9 @@ export function RemoveWorktreeModal({
           ) : null}
 
           {deleteFromSystem && loadError ? (
-            <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-left">
-              <InformationCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
-              <p className="text-xs leading-5 text-destructive">
+            <div className={cn(feedbackSurfaceClassName("destructive"), "flex items-start gap-2 rounded-lg px-3 py-2.5 text-left")}>
+              <InformationCircle className={cn("mt-0.5 size-4 shrink-0", feedbackIconClassName("destructive"))} />
+              <p className="text-xs leading-5">
                 {loadError}
               </p>
             </div>

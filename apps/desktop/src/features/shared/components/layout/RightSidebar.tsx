@@ -390,44 +390,44 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
     </>
   )
 
-  if (isCollapsed) {
-    return (
-      <>
-        <div
-          className="fixed top-11 right-0 bottom-0 z-30"
-          style={{ width: COLLAPSED_HOVER_TRIGGER_WIDTH }}
-          onMouseEnter={() => {
-            handleHoverPreviewIntent()
-            setIsHoverPreviewOpen(true)
-          }}
-        />
-        {isHoverPreviewOpen ? (
-          <div
-            className="fixed top-11 right-0 bottom-0 z-30 flex flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[-18px_0_48px_rgba(0,0,0,0.18)]"
-            style={{ width }}
-            onMouseEnter={() => setIsHoverPreviewOpen(true)}
-            onMouseLeave={() => setIsHoverPreviewOpen(false)}
-          >
-            {renderSidebarBody(false)}
-          </div>
-        ) : null}
-      </>
-    )
-  }
-
   return (
-    <SidebarShell
-      width={width}
-      setWidth={setWidth}
-      isCollapsed={isCollapsed}
-      side="right"
-      sizeConstraintClass={activeTab === "browser" ? "min-w-[420px]" : "min-w-[300px]"}
-    >
-      {({ isResizing }) => (
+    <>
+      {isCollapsed ? (
         <>
-          {renderSidebarBody(isResizing)}
+          <div
+            className="fixed top-11 right-0 bottom-0 z-30"
+            style={{ width: COLLAPSED_HOVER_TRIGGER_WIDTH }}
+            onMouseEnter={() => {
+              handleHoverPreviewIntent()
+              setIsHoverPreviewOpen(true)
+            }}
+          />
+          {isHoverPreviewOpen ? (
+            <div
+              className="fixed top-11 right-0 bottom-0 z-30 flex flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[-18px_0_48px_rgba(0,0,0,0.18)]"
+              style={{ width }}
+              onMouseEnter={() => setIsHoverPreviewOpen(true)}
+              onMouseLeave={() => setIsHoverPreviewOpen(false)}
+            >
+              {renderSidebarBody(false)}
+            </div>
+          ) : null}
         </>
-      )}
-    </SidebarShell>
+      ) : null}
+
+      <SidebarShell
+        width={width}
+        setWidth={setWidth}
+        isCollapsed={isCollapsed}
+        side="right"
+        sizeConstraintClass={activeTab === "browser" ? "min-w-[420px]" : "min-w-[300px]"}
+      >
+        {({ isResizing }) => (
+          <>
+            {renderSidebarBody(isResizing)}
+          </>
+        )}
+      </SidebarShell>
+    </>
   )
 }

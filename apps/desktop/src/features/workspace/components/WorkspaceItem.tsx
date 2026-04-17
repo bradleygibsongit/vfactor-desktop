@@ -1,4 +1,5 @@
 import { Archive, GitBranch, PushPin } from "@/components/icons"
+import { vcsSurfaceClassNames, vcsTextClassNames } from "@/features/shared/appearance"
 import type { Workspace } from "../types"
 import { formatRelativeTime } from "@/lib/utils/time"
 import { cn } from "@/lib/utils"
@@ -52,7 +53,13 @@ export function WorkspaceItem({ workspace, selected, onClick }: WorkspaceItemPro
         </div>
         {/* Diff badge - hidden on hover */}
         {workspace.diffCount && (
-          <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-medium group-hover:hidden">
+          <span
+            className={cn(
+              "shrink-0 rounded px-1.5 py-0.5 text-xs font-medium group-hover:hidden",
+              vcsSurfaceClassNames.added,
+              vcsTextClassNames.added
+            )}
+          >
             +{workspace.diffCount.toLocaleString()}
           </span>
         )}

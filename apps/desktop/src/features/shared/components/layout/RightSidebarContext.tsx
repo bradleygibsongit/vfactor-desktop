@@ -5,6 +5,7 @@ import { useSidebar } from "./useSidebar"
 import { MIN_MAIN_CONTENT_WIDTH } from "./layoutSizing"
 
 const RIGHT_SIDEBAR_STORAGE_KEY = "nucleus:right-sidebar-width"
+const RIGHT_SIDEBAR_PREFERRED_WIDTH_STORAGE_KEY = "nucleus:right-sidebar-preferred-width"
 const RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY = "nucleus:right-sidebar-collapsed"
 const RIGHT_SIDEBAR_ACTIVE_TAB_STORAGE_KEY = "nucleus:right-sidebar-active-tab"
 const DEFAULT_RIGHT_SIDEBAR_WIDTH = 400
@@ -33,7 +34,9 @@ export function RightSidebarProvider({ children }: { children: ReactNode }) {
   const { activeWorktreePath } = useCurrentProjectWorktree()
   const { isCollapsed: isLeftSidebarCollapsed, width: leftSidebarWidth } = useSidebar()
   const isAvailable = Boolean(activeWorktreePath)
-  const effectiveLeftSidebarWidth = isLeftSidebarCollapsed ? 0 : leftSidebarWidth
+  const effectiveLeftSidebarWidth = isLeftSidebarCollapsed
+    ? 0
+    : leftSidebarWidth
   const [activeTab, setActiveTabState] = useState<RightSidebarTab>(() => {
     if (typeof window === "undefined") {
       return DEFAULT_RIGHT_SIDEBAR_TAB
@@ -52,22 +55,32 @@ export function RightSidebarProvider({ children }: { children: ReactNode }) {
     const storedCollapsed = window.localStorage.getItem(RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY)
     return storedCollapsed === null ? true : storedCollapsed === "true"
   })
+  const [preferredWidth, setPreferredWidthState] = useState(() => {
+    if (typeof window === "undefined") {
+      return activeTab === "browser" ? BROWSER_RIGHT_SIDEBAR_TARGET_WIDTH : DEFAULT_RIGHT_SIDEBAR_WIDTH
+    }
+
+    const storedWidth = window.localStorage.getItem(RIGHT_SIDEBAR_PREFERRED_WIDTH_STORAGE_KEY)
+    const parsedWidth = storedWidth ? Number(storedWidth) : NaN
+
+    return Number.isFinite(parsedWidth)
+      ? parsedWidth
+      : activeTab === "browser"
+        ? BROWSER_RIGHT_SIDEBAR_TARGET_WIDTH
+        : DEFAULT_RIGHT_SIDEBAR_WIDTH
+  })
   const [width, setWidthState] = useState(() => {
     if (typeof window === "undefined") {
       return activeTab === "browser" ? BROWSER_RIGHT_SIDEBAR_TARGET_WIDTH : DEFAULT_RIGHT_SIDEBAR_WIDTH
     }
 
-    const storedWidth = window.localStorage.getItem(RIGHT_SIDEBAR_STORAGE_KEY)
-    const parsedWidth = storedWidth ? Number(storedWidth) : NaN
     const maxWidth = getMaxRightSidebarWidth(window.innerWidth, effectiveLeftSidebarWidth, activeTab)
+    const effectivePreferredWidth =
+      activeTab === "browser"
+        ? Math.max(preferredWidth, BROWSER_RIGHT_SIDEBAR_TARGET_WIDTH)
+        : preferredWidth
 
-    return Number.isFinite(parsedWidth)
-      ? clampRightSidebarWidth(parsedWidth, maxWidth, activeTab)
-      : clampRightSidebarWidth(
-          activeTab === "browser" ? BROWSER_RIGHT_SIDEBAR_TARGET_WIDTH : DEFAULT_RIGHT_SIDEBAR_WIDTH,
-          maxWidth,
-          activeTab
-        )
+    return clampRightSidebarWidth(effectivePreferredWidth, maxWidth, activeTab)
   })
 
   useEffect(() => {
@@ -87,7 +100,11 @@ export function RightSidebarProvider({ children }: { children: ReactNode }) {
 
     const syncWidthToViewport = () => {
       const maxWidth = getMaxRightSidebarWidth(window.innerWidth, effectiveLeftSidebarWidth, activeTab)
-      const clampedWidth = clampRightSidebarWidth(width, maxWidth, activeTab)
+      const effectivePreferredWidth =
+        activeTab === "browser"
+          ? Math.max(preferredWidth, BROWSER_RIGHT_SIDEBAR_TARGET_WIDTH)
+          : preferredWidth
+      const clampedWidth = clampRightSidebarWidth(effectivePreferredWidth, maxWidth, activeTab)
 
       if (clampedWidth === width) {
         return
@@ -103,7 +120,7 @@ export function RightSidebarProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener("resize", syncWidthToViewport)
     }
-  }, [activeTab, effectiveLeftSidebarWidth, width])
+  }, [activeTab, effectiveLeftSidebarWidth, preferredWidth, width])
 
   const setIsCollapsed = useCallback((nextCollapsed: boolean) => {
     const resolvedCollapsed = isAvailable ? nextCollapsed : true
@@ -136,34 +153,39 @@ export function RightSidebarProvider({ children }: { children: ReactNode }) {
         ? Number.POSITIVE_INFINITY
         : getMaxRightSidebarWidth(window.innerWidth, effectiveLeftSidebarWidth, activeTab)
     const clampedWidth = clampRightSidebarWidth(nextWidth, maxWidth, activeTab)
+    setPreferredWidthState(nextWidth)
     setWidthState(clampedWidth)
 
     if (typeof window !== "undefined") {
       window.localStorage.setItem(RIGHT_SIDEBAR_STORAGE_KEY, String(clampedWidth))
+      window.localStorage.setItem(
+        RIGHT_SIDEBAR_PREFERRED_WIDTH_STORAGE_KEY,
+        String(nextWidth)
+      )
     }
   }, [activeTab, effectiveLeftSidebarWidth])
   const setActiveTab = useCallback((nextTab: RightSidebarTab) => {
-    console.debug("[RightSidebarContext] setActiveTab", { nextTab })
+    if (nextTab === "browser") {
+      setPreferredWidthState((currentWidth) => {
+        const nextPreferredWidth = Math.max(currentWidth, BROWSER_RIGHT_SIDEBAR_TARGET_WIDTH)
+
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            RIGHT_SIDEBAR_PREFERRED_WIDTH_STORAGE_KEY,
+            String(nextPreferredWidth)
+          )
+        }
+
+        return nextPreferredWidth
+      })
+    }
+
     setActiveTabState(nextTab)
 
     if (typeof window !== "undefined") {
       window.localStorage.setItem(RIGHT_SIDEBAR_ACTIVE_TAB_STORAGE_KEY, nextTab)
-
-      if (nextTab === "browser") {
-        const maxWidth = getMaxRightSidebarWidth(window.innerWidth, effectiveLeftSidebarWidth, nextTab)
-        const preferredWidth = clampRightSidebarWidth(
-          Math.max(width, BROWSER_RIGHT_SIDEBAR_TARGET_WIDTH),
-          maxWidth,
-          nextTab
-        )
-
-        if (preferredWidth !== width) {
-          setWidthState(preferredWidth)
-          window.localStorage.setItem(RIGHT_SIDEBAR_STORAGE_KEY, String(preferredWidth))
-        }
-      }
     }
-  }, [effectiveLeftSidebarWidth, width])
+  }, [])
 
   return (
     <RightSidebarContext.Provider

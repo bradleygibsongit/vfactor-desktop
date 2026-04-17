@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { BookOpen, InformationCircle, PencilSimple, Terminal } from "@/components/icons"
+import { BookOpen, CheckCircle, Circle, InformationCircle, PencilSimple, Terminal } from "@/components/icons"
 import {
   Tooltip,
   TooltipContent,
@@ -8,26 +8,65 @@ import {
 } from "@/features/shared/components/ui/tooltip"
 import { ProjectActionIcon } from "@/features/workspace/components/ProjectActionIcon"
 import type { NormalizedCommand } from "../hooks/useCommands"
+import type { ThemeId } from "@/features/shared/appearance"
 
-export interface SlashCommandMenuProps {
-  commands: NormalizedCommand[]
-  query: string
-  isLoading: boolean
-  onSelect: (command: NormalizedCommand) => void
+interface SlashCommandMenuBaseProps {
   onClose: () => void
   selectedIndex: number
   className?: string
 }
 
-export function SlashCommandMenu({
-  commands,
-  query: _query,
-  isLoading,
-  onSelect,
-  onClose,
-  selectedIndex,
+interface SlashCommandListMenuProps extends SlashCommandMenuBaseProps {
+  page: "commands"
+  commands: NormalizedCommand[]
+  query: string
+  isLoading: boolean
+  onSelect: (command: NormalizedCommand) => void
+}
+
+interface SlashThemeMenuProps extends SlashCommandMenuBaseProps {
+  page: "themes"
+  themes: Array<{ id: ThemeId; label: string }>
+  activeThemeId: ThemeId
+  onSelectTheme: (themeId: ThemeId, index: number) => void
+}
+
+export type SlashCommandMenuProps = SlashCommandListMenuProps | SlashThemeMenuProps
+
+function SlashMenuShell({
+  children,
   className,
-}: SlashCommandMenuProps) {
+  containerRef,
+}: {
+  children: ReactNode
+  className?: string
+  containerRef: React.RefObject<HTMLDivElement | null>
+}) {
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        "chat-composer-shell w-full overflow-hidden rounded-2xl border bg-popover shadow-[0_18px_42px_color-mix(in_oklab,black_10%,transparent)]",
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+const slashMenuHeadingClassName =
+  "sticky top-[-0.25rem] z-10 -mx-1 mb-0.5 border-b border-border/35 bg-[color:color-mix(in_oklab,var(--popover)_82%,transparent)] px-3 py-2 text-[10px] font-medium uppercase tracking-[0.15em] text-sidebar-foreground/38 backdrop-blur-md"
+
+export function SlashCommandMenu(props: SlashCommandMenuProps) {
+  const { onClose, selectedIndex, className } = props
+  const isThemePage = props.page === "themes"
+  const commands = props.page === "commands" ? props.commands : []
+  const isLoading = props.page === "commands" ? props.isLoading : false
+  const onSelect = props.page === "commands" ? props.onSelect : null
+  const themes = props.page === "themes" ? props.themes : []
+  const activeThemeId = props.page === "themes" ? props.activeThemeId : null
+  const onSelectTheme = props.page === "themes" ? props.onSelectTheme : null
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const selectedRef = useRef<HTMLDivElement>(null)
@@ -78,46 +117,64 @@ export function SlashCommandMenu({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [onClose])
 
-  if (isLoading && commands.length === 0) {
+  if (!isThemePage && isLoading && commands.length === 0) {
     return (
-      <div
-        ref={containerRef}
-        className={cn(
-          "w-full overflow-hidden rounded-lg border border-border bg-card shadow-sm",
-          className
-        )}
-      >
+      <SlashMenuShell containerRef={containerRef} className={className}>
         <div className="px-3 py-2.5 text-center text-xs text-muted-foreground">
           Loading commands...
         </div>
-      </div>
+      </SlashMenuShell>
     )
   }
 
-  if (commands.length === 0) {
+  if (!isThemePage && commands.length === 0) {
     return (
-      <div
-        ref={containerRef}
-        className={cn(
-          "w-full overflow-hidden rounded-lg border border-border bg-card shadow-sm",
-          className
-        )}
-      >
+      <SlashMenuShell containerRef={containerRef} className={className}>
         <div className="px-3 py-2.5 text-center text-xs text-muted-foreground">
           No commands found
         </div>
-      </div>
+      </SlashMenuShell>
+    )
+  }
+
+  if (isThemePage) {
+    return (
+      <SlashMenuShell containerRef={containerRef} className={className}>
+        <div ref={scrollContainerRef} className="app-scrollbar max-h-64 overflow-y-auto p-1">
+          <div className={slashMenuHeadingClassName}>
+            Themes
+          </div>
+          {themes.map((theme, index) => {
+            const isSelected = selectedIndex === index
+            const isActive = activeThemeId === theme.id
+
+            return (
+              <div
+                key={theme.id}
+                ref={isSelected ? selectedRef : undefined}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onSelectTheme?.(theme.id, index)}
+                className={cn(
+                  "flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 text-sm transition-colors",
+                  isSelected
+                    ? "bg-[var(--sidebar-item-hover)] text-foreground"
+                    : "text-foreground/88 hover:bg-[var(--sidebar-item-hover)]"
+                )}
+              >
+                <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/78">
+                  {isActive ? <CheckCircle size={14} /> : <Circle size={14} />}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">{theme.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      </SlashMenuShell>
     )
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "w-full overflow-hidden rounded-lg border border-border bg-card shadow-sm",
-        className
-      )}
-    >
+    <SlashMenuShell containerRef={containerRef} className={className}>
       <div ref={scrollContainerRef} className="app-scrollbar max-h-64 overflow-y-auto p-1">
         {sections.map((section, sectionIndex) => {
           let runningIndex = 0
@@ -127,7 +184,7 @@ export function SlashCommandMenu({
 
           return (
             <div key={section.key} className={cn(sectionIndex > 0 && "mt-1.5")}>
-              <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
+              <div className={slashMenuHeadingClassName}>
                 {section.label}
               </div>
 
@@ -139,6 +196,8 @@ export function SlashCommandMenu({
                     ? PencilSimple
                     : cmd.icon === "new-terminal"
                       ? Terminal
+                      : cmd.icon === "theme"
+                        ? Circle
                       : cmd.icon === "command"
                         ? Terminal
                       : BookOpen
@@ -147,22 +206,22 @@ export function SlashCommandMenu({
                     key={cmd.id}
                     ref={isSelected ? selectedRef : undefined}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onSelect(cmd)}
+                    onClick={() => onSelect?.(cmd)}
                     className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                      "flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 text-sm transition-colors",
                       isSelected
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-accent/50"
+                        ? "bg-[var(--sidebar-item-hover)] text-foreground"
+                        : "text-foreground/88 hover:bg-[var(--sidebar-item-hover)]"
                     )}
                   >
                     {cmd.projectAction ? (
                       <ProjectActionIcon
                         action={cmd.projectAction}
                         size={14}
-                        className="shrink-0 text-muted-foreground"
+                        className="shrink-0 text-muted-foreground/78"
                       />
                     ) : (
-                      <Icon size={14} className="shrink-0 text-muted-foreground" />
+                      <Icon size={14} className="shrink-0 text-muted-foreground/78" />
                     )}
 
                     <div className="min-w-0 flex-1">
@@ -188,7 +247,7 @@ export function SlashCommandMenu({
           )
         })}
       </div>
-    </div>
+    </SlashMenuShell>
   )
 }
 
@@ -200,7 +259,7 @@ function InfoTooltip({ description }: { description: string }) {
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+          className="ml-auto shrink-0 rounded-md p-0.5 text-muted-foreground/50 transition-colors hover:bg-[var(--sidebar-item-hover)] hover:text-muted-foreground"
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation()

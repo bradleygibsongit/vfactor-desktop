@@ -155,7 +155,7 @@ export function ProjectActionsControl() {
           onClick={openCreateModal}
           size="sm"
           variant="outline"
-          className="h-7 border-border/70 px-2 text-foreground shadow-none"
+          className="h-7 border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] px-2 text-foreground shadow-none hover:bg-[var(--sidebar-item-hover)]"
         >
           <Plus size={14} className="text-muted-foreground" />
           <span>Add action</span>
@@ -170,7 +170,7 @@ export function ProjectActionsControl() {
             onClick={() => void runAction(primaryAction)}
             disabled={runningActionId === primaryAction.id}
             className={cn(
-              "h-7 max-w-[172px] min-w-0 justify-start rounded-r-none border-r-0 shadow-none",
+              "h-7 max-w-[172px] min-w-0 justify-start rounded-r-none border-r-0 border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
               runningActionId === primaryAction.id && "cursor-wait",
             )}
             variant="outline"
@@ -186,7 +186,7 @@ export function ProjectActionsControl() {
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  className="h-7 w-8 rounded-l-none shadow-none"
+                  className="h-7 w-8 rounded-l-none border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]"
                   aria-label="Open project actions menu"
                   disabled={runningActionId != null}
                 />

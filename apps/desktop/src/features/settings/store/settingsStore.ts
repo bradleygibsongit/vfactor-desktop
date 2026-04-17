@@ -1,13 +1,23 @@
 import { create } from "zustand"
+import type { GitPullRequestResolveReason } from "@/desktop/contracts"
 import { loadDesktopStore, type DesktopStoreHandle } from "@/desktop/client"
+import {
+  clampTextSizePx,
+  DEFAULT_TEXT_SIZE_PX,
+  DEFAULT_THEME_ID,
+  isThemeId,
+  setAppearanceState,
+  type ThemeId,
+} from "@/features/shared/appearance"
 import {
   createDefaultGitResolvePrompts,
   normalizeGitResolvePrompts,
   type GitResolvePrompts,
 } from "@/features/shared/components/layout/gitResolve"
-import type { GitPullRequestResolveReason } from "@/desktop/contracts"
 
 const STORE_FILE = "settings.json"
+const APPEARANCE_THEME_ID_KEY = "appearanceThemeId"
+const APPEARANCE_TEXT_SIZE_KEY = "appearanceTextSizePx"
 const GIT_GENERATION_MODEL_KEY = "gitGenerationModel"
 const GIT_RESOLVE_PROMPTS_KEY = "gitResolvePrompts"
 const WORKSPACE_SETUP_MODEL_KEY = "workspaceSetupModel"
@@ -20,6 +30,8 @@ const CLAUDE_DEFAULT_FAST_MODE_KEY = "claudeDefaultFastMode"
 const PERSIST_DEBOUNCE_MS = 250
 
 interface PersistedSettings {
+  appearanceThemeId: ThemeId
+  appearanceTextSizePx: number
   gitGenerationModel: string
   gitResolvePrompts: GitResolvePrompts
   workspaceSetupModel: string
@@ -34,6 +46,10 @@ interface PersistedSettings {
 interface SettingsState extends PersistedSettings {
   hasLoaded: boolean
   initialize: () => Promise<void>
+  setAppearanceThemeId: (themeId: ThemeId) => void
+  resetAppearanceThemeId: () => void
+  setAppearanceTextSizePx: (sizePx: number) => void
+  resetAppearanceTextSizePx: () => void
   setGitGenerationModel: (model: string) => void
   setGitResolvePrompt: (reason: GitPullRequestResolveReason, prompt: string) => void
   resetGitResolvePrompts: () => void
@@ -59,6 +75,8 @@ let initializePromise: Promise<void> | null = null
 let persistTimeoutId: ReturnType<typeof setTimeout> | null = null
 
 const DEFAULT_PERSISTED_SETTINGS: PersistedSettings = {
+  appearanceThemeId: DEFAULT_THEME_ID,
+  appearanceTextSizePx: DEFAULT_TEXT_SIZE_PX,
   gitGenerationModel: "",
   gitResolvePrompts: createDefaultGitResolvePrompts(),
   workspaceSetupModel: "",
@@ -78,40 +96,50 @@ async function getStore(): Promise<DesktopStoreHandle> {
   return storeInstance
 }
 
-function normalizeGitGenerationModel(model: string | null | undefined): string {
+export function normalizeAppearanceThemeId(themeId: string | null | undefined): ThemeId {
+  return isThemeId(themeId) ? themeId : DEFAULT_THEME_ID
+}
+
+export function normalizeAppearanceTextSizePx(value: number | null | undefined): number {
+  return clampTextSizePx(value)
+}
+
+export function normalizeGitGenerationModel(model: string | null | undefined): string {
   return model?.trim() ?? ""
 }
 
-function normalizeWorkspaceSetupModel(model: string | null | undefined): string {
+export function normalizeWorkspaceSetupModel(model: string | null | undefined): string {
   return model?.trim() ?? ""
 }
 
-function normalizeCodexDefaultModel(model: string | null | undefined): string {
+export function normalizeCodexDefaultModel(model: string | null | undefined): string {
   return model?.trim() ?? ""
 }
 
-function normalizeCodexDefaultReasoningEffort(effort: string | null | undefined): string {
+export function normalizeCodexDefaultReasoningEffort(effort: string | null | undefined): string {
   return effort?.trim() ?? ""
 }
 
-function normalizeCodexDefaultFastMode(enabled: boolean | null | undefined): boolean {
+export function normalizeCodexDefaultFastMode(enabled: boolean | null | undefined): boolean {
   return enabled === true
 }
 
-function normalizeClaudeDefaultModel(model: string | null | undefined): string {
+export function normalizeClaudeDefaultModel(model: string | null | undefined): string {
   return model?.trim() ?? ""
 }
 
-function normalizeClaudeDefaultReasoningEffort(effort: string | null | undefined): string {
+export function normalizeClaudeDefaultReasoningEffort(effort: string | null | undefined): string {
   return effort?.trim() ?? ""
 }
 
-function normalizeClaudeDefaultFastMode(enabled: boolean | null | undefined): boolean {
+export function normalizeClaudeDefaultFastMode(enabled: boolean | null | undefined): boolean {
   return enabled === true
 }
 
 function buildPersistedSettings(source: Partial<PersistedSettings>): PersistedSettings {
   return {
+    appearanceThemeId: normalizeAppearanceThemeId(source.appearanceThemeId),
+    appearanceTextSizePx: normalizeAppearanceTextSizePx(source.appearanceTextSizePx),
     gitGenerationModel: normalizeGitGenerationModel(source.gitGenerationModel),
     gitResolvePrompts: normalizeGitResolvePrompts(source.gitResolvePrompts),
     workspaceSetupModel: normalizeWorkspaceSetupModel(source.workspaceSetupModel),
@@ -132,6 +160,8 @@ function selectPersistedSettings(
   state: Pick<SettingsState, keyof PersistedSettings>
 ): PersistedSettings {
   return buildPersistedSettings({
+    appearanceThemeId: state.appearanceThemeId,
+    appearanceTextSizePx: state.appearanceTextSizePx,
     gitGenerationModel: state.gitGenerationModel,
     gitResolvePrompts: state.gitResolvePrompts,
     workspaceSetupModel: state.workspaceSetupModel,
@@ -155,6 +185,8 @@ function schedulePersist(settings: PersistedSettings): void {
     void (async () => {
       try {
         const store = await getStore()
+        await store.set(APPEARANCE_THEME_ID_KEY, settings.appearanceThemeId)
+        await store.set(APPEARANCE_TEXT_SIZE_KEY, settings.appearanceTextSizePx)
         await store.set(GIT_GENERATION_MODEL_KEY, settings.gitGenerationModel)
         await store.set(GIT_RESOLVE_PROMPTS_KEY, settings.gitResolvePrompts)
         await store.set(WORKSPACE_SETUP_MODEL_KEY, settings.workspaceSetupModel)
@@ -232,6 +264,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       initializePromise = (async () => {
         try {
           const store = await getStore()
+          const savedAppearanceThemeId = await store.get<string>(APPEARANCE_THEME_ID_KEY)
+          const savedAppearanceTextSizePx = await store.get<number>(APPEARANCE_TEXT_SIZE_KEY)
           const savedModel = await store.get<string>(GIT_GENERATION_MODEL_KEY)
           const savedResolvePrompts =
             await store.get<Partial<Record<GitPullRequestResolveReason, string>>>(
@@ -249,22 +283,41 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
           )
           const savedClaudeDefaultFastMode = await store.get<boolean>(CLAUDE_DEFAULT_FAST_MODE_KEY)
 
+          const persistedSettings = buildPersistedSettings({
+            appearanceThemeId: savedAppearanceThemeId,
+            appearanceTextSizePx: savedAppearanceTextSizePx,
+            gitGenerationModel: savedModel,
+            gitResolvePrompts: savedResolvePrompts,
+            workspaceSetupModel: savedWorkspaceSetupModel,
+            codexDefaultModel: savedCodexDefaultModel,
+            codexDefaultReasoningEffort: savedCodexDefaultReasoningEffort,
+            codexDefaultFastMode: savedCodexDefaultFastMode,
+            claudeDefaultModel: savedClaudeDefaultModel,
+            claudeDefaultReasoningEffort: savedClaudeDefaultReasoningEffort,
+            claudeDefaultFastMode: savedClaudeDefaultFastMode,
+          })
+
+          setAppearanceState(
+            {
+              themeId: persistedSettings.appearanceThemeId,
+              textSizePx: persistedSettings.appearanceTextSizePx,
+            },
+            { notify: false }
+          )
+
           set({
-            ...buildPersistedSettings({
-              gitGenerationModel: savedModel,
-              gitResolvePrompts: savedResolvePrompts,
-              workspaceSetupModel: savedWorkspaceSetupModel,
-              codexDefaultModel: savedCodexDefaultModel,
-              codexDefaultReasoningEffort: savedCodexDefaultReasoningEffort,
-              codexDefaultFastMode: savedCodexDefaultFastMode,
-              claudeDefaultModel: savedClaudeDefaultModel,
-              claudeDefaultReasoningEffort: savedClaudeDefaultReasoningEffort,
-              claudeDefaultFastMode: savedClaudeDefaultFastMode,
-            }),
+            ...persistedSettings,
             hasLoaded: true,
           })
         } catch (error) {
           console.error("Failed to load settings:", error)
+          setAppearanceState(
+            {
+              themeId: DEFAULT_THEME_ID,
+              textSizePx: DEFAULT_TEXT_SIZE_PX,
+            },
+            { notify: false }
+          )
           set({
             ...DEFAULT_PERSISTED_SETTINGS,
             hasLoaded: true,
@@ -275,6 +328,32 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       })
 
       return initializePromise
+    },
+
+    setAppearanceThemeId: (themeId) => {
+      const normalizedThemeId = normalizeAppearanceThemeId(themeId)
+      set({ appearanceThemeId: normalizedThemeId })
+      setAppearanceState({ themeId: normalizedThemeId })
+      persistWith({ appearanceThemeId: normalizedThemeId })
+    },
+
+    resetAppearanceThemeId: () => {
+      set({ appearanceThemeId: DEFAULT_THEME_ID })
+      setAppearanceState({ themeId: DEFAULT_THEME_ID })
+      persistWith({ appearanceThemeId: DEFAULT_THEME_ID })
+    },
+
+    setAppearanceTextSizePx: (sizePx) => {
+      const normalizedSizePx = normalizeAppearanceTextSizePx(sizePx)
+      set({ appearanceTextSizePx: normalizedSizePx })
+      setAppearanceState({ textSizePx: normalizedSizePx })
+      persistWith({ appearanceTextSizePx: normalizedSizePx })
+    },
+
+    resetAppearanceTextSizePx: () => {
+      set({ appearanceTextSizePx: DEFAULT_TEXT_SIZE_PX })
+      setAppearanceState({ textSizePx: DEFAULT_TEXT_SIZE_PX })
+      persistWith({ appearanceTextSizePx: DEFAULT_TEXT_SIZE_PX })
     },
 
     setGitGenerationModel: (model) => {
@@ -382,14 +461,3 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     },
   }
 })
-
-export {
-  normalizeClaudeDefaultFastMode,
-  normalizeClaudeDefaultModel,
-  normalizeClaudeDefaultReasoningEffort,
-  normalizeCodexDefaultFastMode,
-  normalizeCodexDefaultModel,
-  normalizeCodexDefaultReasoningEffort,
-  normalizeGitGenerationModel,
-  normalizeWorkspaceSetupModel,
-}

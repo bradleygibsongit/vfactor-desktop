@@ -15,12 +15,22 @@ import type {
 } from "@/desktop/client"
 import { PatchDiff } from "@pierre/diffs/react"
 import { MessageResponse } from "@/features/chat/components/ai-elements/message"
-import { useTheme } from "@/features/shared/hooks"
+import {
+  feedbackIconClassName,
+  feedbackSurfaceClassName,
+  useAppearance,
+  type PierreThemeName,
+} from "@/features/shared/appearance"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/features/shared/components/ui/collapsible"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/features/shared/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useEffect, useState, type ReactNode } from "react"
 import { sortPullRequestChecks } from "./pullRequestChecks"
@@ -53,8 +63,6 @@ type ParsedGitHubBody = {
   badges: ReviewBadge[]
 }
 
-type PierreThemeName = "pierre-dark" | "pierre-light"
-
 function ActivityAvatar({
   avatarUrl,
   alt,
@@ -71,7 +79,7 @@ function ActivityAvatar({
   }, [avatarUrl])
 
   return (
-    <div className="mt-0.5 size-5 shrink-0 overflow-hidden rounded-full border border-sidebar-border/60 bg-white">
+    <div className="mt-0.5 size-5 shrink-0 overflow-hidden rounded-full border border-sidebar-border/60 bg-card">
       {avatarUrl && !hasImageError ? (
         <img
           src={avatarUrl}
@@ -91,11 +99,11 @@ function ActivityAvatar({
 function getCheckTone(status: GitPullRequestCheck["status"]): string {
   switch (status) {
     case "pending":
-      return "text-amber-600"
+      return feedbackIconClassName("warning")
     case "failed":
-      return "text-destructive"
+      return feedbackIconClassName("destructive")
     case "passed":
-      return "text-emerald-600"
+      return feedbackIconClassName("success")
     case "cancelled":
       return "text-muted-foreground"
     case "skipped":
@@ -122,6 +130,31 @@ function getCheckStatusLabel(status: GitPullRequestCheck["status"]): string {
   }
 }
 
+function truncateMiddle(value: string, startChars = 12, endChars = 11) {
+  if (value.length <= startChars + endChars + 3) {
+    return value
+  }
+
+  return `${value.slice(0, startChars)}...${value.slice(-endChars)}`
+}
+
+function ReviewPathLabel({ path }: { path: string }) {
+  const truncatedPath = truncateMiddle(path)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="block max-w-[11.5rem] truncate text-xs font-medium text-muted-foreground">
+          {truncatedPath}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="start" className="max-w-[32rem] break-all text-sm leading-5">
+        {path}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function CheckStatusIcon({ status }: { status: GitPullRequestCheck["status"] }) {
   const className = cn("size-4 shrink-0", getCheckTone(status))
 
@@ -144,13 +177,13 @@ function CheckStatusIcon({ status }: { status: GitPullRequestCheck["status"] }) 
 function getReviewTone(state: GitPullRequestReview["state"]): string {
   switch (state) {
     case "APPROVED":
-      return "text-emerald-600"
+      return feedbackIconClassName("success")
     case "CHANGES_REQUESTED":
-      return "text-destructive"
+      return feedbackIconClassName("destructive")
     case "COMMENTED":
-      return "text-sky-600"
+      return feedbackIconClassName("info")
     case "PENDING":
-      return "text-amber-600"
+      return feedbackIconClassName("warning")
     case "DISMISSED":
       return "text-muted-foreground"
     default:
@@ -248,19 +281,19 @@ function getBadgeToneClassName(label: string, url: string): string {
   const normalizedUrl = url.toLowerCase()
 
   if (normalizedLabel.includes("P0") || normalizedUrl.includes("badge/p0-")) {
-    return "border-rose-500/25 bg-rose-500/12 text-rose-700"
+    return feedbackSurfaceClassName("destructive")
   }
 
   if (normalizedLabel.includes("P1") || normalizedUrl.includes("badge/p1-")) {
-    return "border-orange-500/25 bg-orange-500/12 text-orange-700"
+    return feedbackSurfaceClassName("warning")
   }
 
   if (normalizedLabel.includes("P2") || normalizedUrl.includes("badge/p2-")) {
-    return "border-amber-500/25 bg-amber-500/12 text-amber-700"
+    return feedbackSurfaceClassName("warning")
   }
 
   if (normalizedLabel.includes("P3") || normalizedUrl.includes("badge/p3-")) {
-    return "border-sky-500/25 bg-sky-500/12 text-sky-700"
+    return feedbackSurfaceClassName("info")
   }
 
   return "border-border bg-muted/60 text-foreground/80"
@@ -456,8 +489,7 @@ export function PullRequestChecksPanel({
   const [openCollapsedReviewComments, setOpenCollapsedReviewComments] = useState<
     Record<string, boolean>
   >({})
-  const appTheme = useTheme()
-  const diffTheme: PierreThemeName = appTheme === "vs-dark" ? "pierre-dark" : "pierre-light"
+  const { pierreDiffTheme: diffTheme } = useAppearance()
   const normalizedChecks = Array.isArray(checks) ? checks : []
   const normalizedComments = Array.isArray(comments) ? comments : []
   const normalizedReviews = Array.isArray(reviews) ? reviews : []
@@ -479,275 +511,277 @@ export function PullRequestChecksPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col px-3 py-3">
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-foreground">{pullRequest.title}</h2>
-          {pullRequest.description ? (
-            <Collapsible open={isDescriptionOpen} onOpenChange={setIsDescriptionOpen}>
-              <CollapsibleTrigger className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
-                <CaretRight
-                  size={12}
-                  className={cn("shrink-0 transition-transform", isDescriptionOpen && "rotate-90")}
-                />
-                <span>Description</span>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-1">
-                <div className="text-xs text-muted-foreground">
-                  <MessageResponse
-                    className={cn(
-                      "leading-5 [&>*]:text-inherit",
-                      "[&_h1]:!text-sm [&_h1]:font-semibold [&_h1]:!leading-5 [&_h1]:mt-0 [&_h1]:mb-1.5",
-                      "[&_h2]:!text-sm [&_h2]:font-semibold [&_h2]:!leading-5 [&_h2]:mt-0 [&_h2]:mb-1.5",
-                      "[&_h3]:!text-xs [&_h3]:font-semibold [&_h3]:!leading-5 [&_h3]:mt-0 [&_h3]:mb-1",
-                      "[&_h4]:!text-xs [&_h4]:font-medium [&_h4]:!leading-5 [&_h4]:mt-0 [&_h4]:mb-1",
-                      "[&_h5]:!text-xs [&_h5]:font-medium [&_h5]:!leading-5 [&_h5]:mt-0 [&_h5]:mb-1",
-                      "[&_h6]:!text-xs [&_h6]:font-medium [&_h6]:!leading-5 [&_h6]:mt-0 [&_h6]:mb-1",
-                      "[&_p]:text-xs [&_p]:leading-5 [&_p]:my-0 [&_p+p]:mt-1.5",
-                      "[&_ul]:my-1 [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:pl-4",
-                      "[&_li]:text-xs [&_li]:leading-5 [&_li+li]:mt-0.5",
-                      "[&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3",
-                      "[&_pre]:my-1.5 [&_pre]:text-[11px] [&_pre]:leading-4",
-                      "[&_code]:text-[11px]"
-                    )}
-                  >
-                    {pullRequest.description}
-                  </MessageResponse>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+      <div className="mx-auto flex w-full max-w-[760px] flex-col">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-foreground">{pullRequest.title}</h2>
+            {pullRequest.description ? (
+              <Collapsible open={isDescriptionOpen} onOpenChange={setIsDescriptionOpen}>
+                <CollapsibleTrigger className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+                  <CaretRight
+                    size={12}
+                    className={cn("shrink-0 transition-transform", isDescriptionOpen && "rotate-90")}
+                  />
+                  <span>Description</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-1">
+                  <div className="text-xs text-muted-foreground">
+                    <MessageResponse
+                      className={cn(
+                        "leading-5 [&>*]:text-inherit",
+                        "[&_h1]:!text-sm [&_h1]:font-semibold [&_h1]:!leading-5 [&_h1]:mt-0 [&_h1]:mb-1.5",
+                        "[&_h2]:!text-sm [&_h2]:font-semibold [&_h2]:!leading-5 [&_h2]:mt-0 [&_h2]:mb-1.5",
+                        "[&_h3]:!text-xs [&_h3]:font-semibold [&_h3]:!leading-5 [&_h3]:mt-0 [&_h3]:mb-1",
+                        "[&_h4]:!text-xs [&_h4]:font-medium [&_h4]:!leading-5 [&_h4]:mt-0 [&_h4]:mb-1",
+                        "[&_h5]:!text-xs [&_h5]:font-medium [&_h5]:!leading-5 [&_h5]:mt-0 [&_h5]:mb-1",
+                        "[&_h6]:!text-xs [&_h6]:font-medium [&_h6]:!leading-5 [&_h6]:mt-0 [&_h6]:mb-1",
+                        "[&_p]:text-xs [&_p]:leading-5 [&_p]:my-0 [&_p+p]:mt-1.5",
+                        "[&_ul]:my-1 [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:pl-4",
+                        "[&_li]:text-xs [&_li]:leading-5 [&_li+li]:mt-0.5",
+                        "[&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3",
+                        "[&_pre]:my-1.5 [&_pre]:text-[11px] [&_pre]:leading-4",
+                        "[&_code]:text-[11px]"
+                      )}
+                    >
+                      {pullRequest.description}
+                    </MessageResponse>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            ) : null}
+          </div>
+
+          {loadError ? (
+            <div className={cn(feedbackSurfaceClassName("destructive"), "rounded-lg px-3 py-2 text-sm")}>{loadError}</div>
           ) : null}
         </div>
 
-        {loadError ? (
-          <div className="text-sm text-destructive">{loadError}</div>
+        {isLoading && sortedChecks.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center py-8 text-sm text-muted-foreground">
+            Waiting for checks to report back...
+          </div>
         ) : null}
-      </div>
 
-      {isLoading && sortedChecks.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center py-8 text-sm text-muted-foreground">
-          Waiting for checks to report back...
-        </div>
-      ) : null}
+        {!isLoading &&
+        sortedChecks.length === 0 &&
+        sortedReviews.length === 0 &&
+        sortedComments.length === 0 &&
+        sortedReviewComments.length === 0 &&
+        !loadError ? (
+          <RightSidebarEmptyState
+            className="py-10"
+            title="No checks, reviews, or comments yet"
+            description="This pull request has not published any checks or discussion activity yet."
+          />
+        ) : null}
 
-      {!isLoading &&
-      sortedChecks.length === 0 &&
-      sortedReviews.length === 0 &&
-      sortedComments.length === 0 &&
-      sortedReviewComments.length === 0 &&
-      !loadError ? (
-        <RightSidebarEmptyState
-          className="py-10"
-          title="No checks, reviews, or comments yet"
-          description="This pull request has not published any checks or discussion activity yet."
-        />
-      ) : null}
-
-      {sortedChecks.length > 0 ? (
-        <div className="space-y-2 pt-4">
-          <div className="pb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/72">
-            Checks
-          </div>
-          {sortedChecks.map((check) => (
-            <div key={check.id} className="flex items-center justify-between gap-3 text-sm">
-              <div className="flex min-w-0 items-center gap-2">
-                <CheckStatusIcon status={check.status} />
-                <span className="truncate text-foreground">{check.name}</span>
-              </div>
-              <span className={cn("shrink-0", getCheckTone(check.status))}>
-                {getCheckStatusLabel(check.status)}
-              </span>
+        {sortedChecks.length > 0 ? (
+          <div className="space-y-2 pt-4">
+            <div className="pb-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/72">
+              Checks
             </div>
-          ))}
-        </div>
-      ) : null}
-
-      {sortedReviews.length > 0 ? (
-        <div className="space-y-2 pt-4">
-          <div className="pb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/72">
-            Reviews
-          </div>
-          {sortedReviews.map((review) => {
-            const submittedAtLabel = formatReviewTimestamp(review.submittedAt)
-            const isReviewOpen = openCollapsedReviews[review.id] ?? false
-            const header = (
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-2">
-                  <ActivityAvatar
-                    avatarUrl={review.authorAvatarUrl}
-                    alt={`${review.authorLogin} avatar`}
-                    fallback={<ReviewStatusIcon state={review.state} />}
-                  />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-foreground">
-                      {review.authorLogin}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right text-[11px] text-muted-foreground">
-                  {submittedAtLabel ? <div>{submittedAtLabel}</div> : null}
-                </div>
-              </div>
-            )
-
-            return (
-              <div
-                key={review.id}
-                className="space-y-2 rounded-xl border border-sidebar-border/60 bg-background/55 px-3 py-2.5"
-              >
-                <Collapsible
-                  open={isReviewOpen}
-                  onOpenChange={(nextOpen) => {
-                    setOpenCollapsedReviews((current) => ({
-                      ...current,
-                      [review.id]: nextOpen,
-                    }))
-                  }}
-                >
-                  <CollapsibleTrigger className="w-full text-left">
-                    <div className="flex items-start gap-2">
-                      <CaretRight
-                        size={12}
-                        className={cn(
-                          "mt-1 shrink-0 text-muted-foreground transition-transform",
-                          isReviewOpen && "rotate-90"
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">{header}</div>
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-2">
-                    <MarkdownBody body={review.body} />
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )
-          })}
-        </div>
-      ) : null}
-
-      {sortedReviewComments.length > 0 ? (
-        <div className="space-y-2 pt-4">
-          <div className="pb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/72">
-            Review comments
-          </div>
-          {sortedReviewComments.map((comment) => {
-            const publishedAtLabel = formatReviewTimestamp(comment.publishedAt ?? comment.createdAt)
-            const pathLabel = comment.path ?? null
-            const lineRange = getReviewDiffLineRange(comment.startLine, comment.line)
-            const isResolved = comment.isResolved
-            const isOutdated = comment.isOutdated
-            const shouldCollapse = isResolved || isOutdated
-            const isCollapsedOpen = openCollapsedReviewComments[comment.id] ?? !shouldCollapse
-            const header = (
-              <div className="flex items-start justify-between gap-3">
+            {sortedChecks.map((check) => (
+              <div key={check.id} className="flex items-center justify-between gap-3 text-sm">
                 <div className="flex min-w-0 items-center gap-2">
-                  <ActivityAvatar
-                    avatarUrl={comment.authorAvatarUrl}
-                    alt={`${comment.authorLogin} avatar`}
-                    fallback={
-                      <InformationCircle size={15} className="size-4 shrink-0 text-sky-600" />
-                    }
-                  />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      {pathLabel ? (
-                        <div className="truncate text-xs font-medium text-muted-foreground">
-                          {pathLabel}
-                        </div>
-                      ) : null}
-                      {isResolved ? <span className="text-xs text-emerald-600">Resolved</span> : null}
-                      {isOutdated ? <span className="text-xs text-muted-foreground">Outdated</span> : null}
-                    </div>
-                  </div>
+                  <CheckStatusIcon status={check.status} />
+                  <span className="truncate text-foreground">{check.name}</span>
                 </div>
-                <div className="text-right text-[11px] text-muted-foreground">
-                  {publishedAtLabel ? <div>{publishedAtLabel}</div> : null}
-                </div>
+                <span className={cn("shrink-0", getCheckTone(check.status))}>
+                  {getCheckStatusLabel(check.status)}
+                </span>
               </div>
-            )
-
-            return (
-              <div
-                key={comment.id}
-                className="space-y-2 rounded-xl border border-sidebar-border/60 bg-background/55 px-3 py-2.5"
-              >
-                <Collapsible
-                  open={isCollapsedOpen}
-                  onOpenChange={(nextOpen) => {
-                    setOpenCollapsedReviewComments((current) => ({
-                      ...current,
-                      [comment.id]: nextOpen,
-                    }))
-                  }}
-                >
-                  <CollapsibleTrigger className="w-full text-left">
-                    <div className="flex items-start gap-2">
-                      <CaretRight
-                        size={12}
-                        className={cn(
-                          "mt-1 shrink-0 text-muted-foreground transition-transform",
-                          isCollapsedOpen && "rotate-90"
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">{header}</div>
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-2">
-                    <MarkdownBody body={comment.body} />
-                    <div className="pt-2">
-                      <ReviewDiffHunk
-                        path={comment.path}
-                        diffHunk={comment.diffHunk}
-                        lineRange={lineRange}
-                        theme={diffTheme}
-                      />
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )
-          })}
-        </div>
-      ) : null}
-
-      {sortedComments.length > 0 ? (
-        <div className="space-y-2 pt-4">
-          <div className="pb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/72">
-            Comments
+            ))}
           </div>
-          {sortedComments.map((comment) => {
-            const createdAtLabel = formatReviewTimestamp(comment.createdAt)
+        ) : null}
 
-            return (
-              <div
-                key={comment.id}
-                className="space-y-2 rounded-xl border border-sidebar-border/60 bg-background/55 px-3 py-2.5"
-              >
+        {sortedReviews.length > 0 ? (
+          <div className="space-y-2 pt-4">
+            <div className="pb-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/72">
+              Reviews
+            </div>
+            {sortedReviews.map((review) => {
+              const submittedAtLabel = formatReviewTimestamp(review.submittedAt)
+              const isReviewOpen = openCollapsedReviews[review.id] ?? false
+              const header = (
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-2">
+                    <ActivityAvatar
+                      avatarUrl={review.authorAvatarUrl}
+                      alt={`${review.authorLogin} avatar`}
+                      fallback={<ReviewStatusIcon state={review.state} />}
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-foreground">
+                        {review.authorLogin}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-muted-foreground">
+                    {submittedAtLabel ? <div>{submittedAtLabel}</div> : null}
+                  </div>
+                </div>
+              )
+
+              return (
+                <div
+                  key={review.id}
+                  className="space-y-2 rounded-xl border border-sidebar-border/60 bg-background/55 px-3 py-2.5"
+                >
+                  <Collapsible
+                    open={isReviewOpen}
+                    onOpenChange={(nextOpen) => {
+                      setOpenCollapsedReviews((current) => ({
+                        ...current,
+                        [review.id]: nextOpen,
+                      }))
+                    }}
+                  >
+                    <CollapsibleTrigger className="w-full text-left">
+                      <div className="flex items-start gap-2">
+                        <CaretRight
+                          size={12}
+                          className={cn(
+                            "mt-1 shrink-0 text-muted-foreground transition-transform",
+                            isReviewOpen && "rotate-90"
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">{header}</div>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-2">
+                      <MarkdownBody body={review.body} />
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+
+        {sortedReviewComments.length > 0 ? (
+          <div className="space-y-2 pt-4">
+            <div className="pb-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/72">
+              Review comments
+            </div>
+            {sortedReviewComments.map((comment) => {
+              const publishedAtLabel = formatReviewTimestamp(
+                comment.publishedAt ?? comment.createdAt
+              )
+              const pathLabel = comment.path ?? null
+              const lineRange = getReviewDiffLineRange(comment.startLine, comment.line)
+              const isResolved = comment.isResolved
+              const isOutdated = comment.isOutdated
+              const shouldCollapse = isResolved || isOutdated
+              const isCollapsedOpen = openCollapsedReviewComments[comment.id] ?? !shouldCollapse
+              const header = (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
                     <ActivityAvatar
                       avatarUrl={comment.authorAvatarUrl}
                       alt={`${comment.authorLogin} avatar`}
                       fallback={
-                        <InformationCircle size={15} className="size-4 shrink-0 text-sky-600" />
+                        <InformationCircle size={15} className={cn("size-4 shrink-0", feedbackIconClassName("info"))} />
                       }
                     />
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-foreground">
-                        {comment.authorLogin}
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {pathLabel ? (
+                          <ReviewPathLabel path={pathLabel} />
+                        ) : null}
+                        {isResolved ? <span className={cn("text-xs", feedbackIconClassName("success"))}>Resolved</span> : null}
+                        {isOutdated ? <span className="text-xs text-muted-foreground">Outdated</span> : null}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right text-[11px] text-muted-foreground">
-                    {createdAtLabel ? <div>{createdAtLabel}</div> : null}
+                  <div className="text-right text-xs text-muted-foreground">
+                    {publishedAtLabel ? <div>{publishedAtLabel}</div> : null}
                   </div>
                 </div>
-                <MarkdownBody body={comment.body} />
-              </div>
-            )
-          })}
-        </div>
-      ) : null}
+              )
+
+              return (
+                <div
+                  key={comment.id}
+                  className="space-y-2 rounded-xl border border-sidebar-border/60 bg-background/55 px-3 py-2.5"
+                >
+                  <Collapsible
+                    open={isCollapsedOpen}
+                    onOpenChange={(nextOpen) => {
+                      setOpenCollapsedReviewComments((current) => ({
+                        ...current,
+                        [comment.id]: nextOpen,
+                      }))
+                    }}
+                  >
+                    <CollapsibleTrigger className="w-full text-left">
+                      <div className="flex items-start gap-2">
+                        <CaretRight
+                          size={12}
+                          className={cn(
+                            "mt-1 shrink-0 text-muted-foreground transition-transform",
+                            isCollapsedOpen && "rotate-90"
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">{header}</div>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-2">
+                      <MarkdownBody body={comment.body} />
+                      <div className="pt-2">
+                        <ReviewDiffHunk
+                          path={comment.path}
+                          diffHunk={comment.diffHunk}
+                          lineRange={lineRange}
+                          theme={diffTheme}
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+
+        {sortedComments.length > 0 ? (
+          <div className="space-y-2 pt-4">
+            <div className="pb-1 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/72">
+              Comments
+            </div>
+            {sortedComments.map((comment) => {
+              const createdAtLabel = formatReviewTimestamp(comment.createdAt)
+
+              return (
+                <div
+                  key={comment.id}
+                  className="space-y-2 rounded-xl border border-sidebar-border/60 bg-background/55 px-3 py-2.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <ActivityAvatar
+                        avatarUrl={comment.authorAvatarUrl}
+                        alt={`${comment.authorLogin} avatar`}
+                        fallback={
+                          <InformationCircle size={15} className={cn("size-4 shrink-0", feedbackIconClassName("info"))} />
+                        }
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {comment.authorLogin}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      {createdAtLabel ? <div>{createdAtLabel}</div> : null}
+                    </div>
+                  </div>
+                  <MarkdownBody body={comment.body} />
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

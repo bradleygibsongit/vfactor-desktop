@@ -36,6 +36,8 @@ const { useSettingsStore } = await import("./settingsStore")
 
 function resetSettingsStore() {
   useSettingsStore.setState({
+    appearanceThemeId: "system",
+    appearanceTextSizePx: 13,
     gitGenerationModel: "",
     gitResolvePrompts: {
       conflicts: "conflicts",
@@ -49,6 +51,9 @@ function resetSettingsStore() {
     codexDefaultModel: "",
     codexDefaultReasoningEffort: "",
     codexDefaultFastMode: false,
+    claudeDefaultModel: "",
+    claudeDefaultReasoningEffort: "",
+    claudeDefaultFastMode: false,
     hasLoaded: false,
   })
 }
@@ -92,6 +97,45 @@ describe("settingsStore resolve prompts", () => {
     expect(useSettingsStore.getState().codexDefaultModel).toBe("gpt-5.4")
     expect(useSettingsStore.getState().codexDefaultReasoningEffort).toBe("high")
     expect(useSettingsStore.getState().codexDefaultFastMode).toBe(true)
+  })
+
+  test("initializes appearance settings from persisted values", async () => {
+    storeData.set("appearanceThemeId", "dracula")
+    storeData.set("appearanceTextSizePx", 16)
+
+    await useSettingsStore.getState().initialize()
+
+    expect(useSettingsStore.getState().appearanceThemeId).toBe("dracula")
+    expect(useSettingsStore.getState().appearanceTextSizePx).toBe(16)
+  })
+
+  test("persists appearance settings after edits", async () => {
+    await useSettingsStore.getState().initialize()
+
+    useSettingsStore.getState().setAppearanceThemeId("nord")
+    useSettingsStore.getState().setAppearanceTextSizePx(12)
+
+    await Bun.sleep(350)
+
+    expect(storeData.get("appearanceThemeId")).toBe("nord")
+    expect(storeData.get("appearanceTextSizePx")).toBe(12)
+  })
+
+  test("reset methods restore default appearance settings", async () => {
+    await useSettingsStore.getState().initialize()
+
+    useSettingsStore.getState().setAppearanceThemeId("nord")
+    useSettingsStore.getState().setAppearanceTextSizePx(12)
+    await Bun.sleep(350)
+
+    useSettingsStore.getState().resetAppearanceThemeId()
+    useSettingsStore.getState().resetAppearanceTextSizePx()
+    await Bun.sleep(350)
+
+    expect(storeData.get("appearanceThemeId")).toBe("system")
+    expect(storeData.get("appearanceTextSizePx")).toBe(13)
+    expect(useSettingsStore.getState().appearanceThemeId).toBe("system")
+    expect(useSettingsStore.getState().appearanceTextSizePx).toBe(13)
   })
 
   test("persists Codex defaults after edits", async () => {

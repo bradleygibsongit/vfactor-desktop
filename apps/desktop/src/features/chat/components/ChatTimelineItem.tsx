@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { vcsTextClassNames } from "@/features/shared/appearance"
 import {
   Bash,
   CaretDown,
@@ -260,9 +261,9 @@ function renderDiffStats({ added, removed }: { added: number; removed: number })
 
   return (
     <span className="ml-1.5 text-[0.9em]">
-      {added > 0 ? <span className="font-medium text-emerald-500">+{added}</span> : null}
+      {added > 0 ? <span className={cn("font-medium", vcsTextClassNames.added)}>+{added}</span> : null}
       {added > 0 && removed > 0 ? " " : null}
-      {removed > 0 ? <span className="font-medium text-red-500">-{removed}</span> : null}
+      {removed > 0 ? <span className={cn("font-medium", vcsTextClassNames.deleted)}>-{removed}</span> : null}
     </span>
   )
 }
@@ -634,13 +635,13 @@ function InlineActivityRow({
         }
       : approvalState === "approved"
         ? {
-            text: "text-emerald-600 dark:text-emerald-400",
-            icon: "text-emerald-600 dark:text-emerald-400",
+            text: "text-[color:var(--color-success)]",
+            icon: "text-[color:var(--color-success)]",
           }
         : approvalState === "denied"
           ? {
-              text: "text-red-600 dark:text-red-400",
-              icon: "text-red-600 dark:text-red-400",
+              text: "text-[color:var(--color-destructive)]",
+              icon: "text-[color:var(--color-destructive)]",
             }
           : null
 

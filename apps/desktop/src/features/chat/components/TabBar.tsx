@@ -38,6 +38,7 @@ export function TabBar({ tabs, activeTabId, onTabChange, onTabClose }: TabBarPro
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null)
   const [tabOrderPreview, setTabOrderPreview] = useState<string[] | null>(null)
   const tabOrderRef = useRef<string[] | null>(null)
+  const enableLayoutAnimation = draggedTabId !== null
 
   const tabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
   const tabIds = tabs.map((tab) => tab.id)
@@ -128,7 +129,9 @@ export function TabBar({ tabs, activeTabId, onTabChange, onTabClose }: TabBarPro
                 value={tab.id}
                 layout="position"
                 transition={{
-                  layout: { type: "spring", stiffness: 560, damping: 42, mass: 0.55 },
+                  layout: enableLayoutAnimation
+                    ? { type: "spring", stiffness: 560, damping: 42, mass: 0.55 }
+                    : { duration: 0 },
                 }}
                 whileDrag={{
                   zIndex: 20,

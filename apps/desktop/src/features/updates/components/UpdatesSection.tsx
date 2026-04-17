@@ -1,5 +1,6 @@
 import { CheckCircle, Refresh } from "@/components/icons"
 import type { AppUpdateState } from "@/desktop/client"
+import { feedbackIconClassName, feedbackSurfaceClassName } from "@/features/shared/appearance"
 import { Button } from "@/features/shared/components/ui/button"
 import { useAppUpdateStore } from "@/features/updates/store/updateStore"
 import { formatUpdateTime, getUpdateStatusLabel } from "./updatePresentation"
@@ -44,7 +45,7 @@ export function UpdatesSection() {
           <div className="min-w-0">
             {updateState.status === "up-to-date" ? (
               <div className="flex items-center gap-2">
-                <CheckCircle size={15} className="shrink-0 text-emerald-500" />
+                <CheckCircle size={15} className={feedbackIconClassName("success")} />
                 <p className="text-sm font-medium">Nucleus is up to date</p>
               </div>
             ) : (
@@ -82,8 +83,8 @@ export function UpdatesSection() {
         {renderReleaseNotes(updateState.message, updateState.status)}
 
         {showErrorDetail ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-3">
-            <p className="text-sm font-medium text-destructive">Updater error</p>
+          <div className={feedbackSurfaceClassName("destructive") + " rounded-xl px-3 py-3"}>
+            <p className="text-sm font-medium">Updater error</p>
             <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{updateState.message}</p>
           </div>
         ) : null}

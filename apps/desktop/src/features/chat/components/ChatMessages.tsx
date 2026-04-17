@@ -1,5 +1,6 @@
 import { measureElement as measureVirtualElement, useVirtualizer } from "@tanstack/react-virtual"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { vcsTextClassNames } from "@/features/shared/appearance"
 import type { Project, ProjectWorktree } from "@/features/workspace/types"
 import type {
   ChildSessionState,
@@ -37,6 +38,7 @@ import {
 } from "./timelineActivity"
 import type { ChildSessionData } from "./agent-activity/AgentActivitySubagent"
 import { getMessageAttachmentParts, getMessageTextContent } from "../domain/runtimeMessages"
+import { cn } from "@/lib/utils"
 
 interface ChatMessagesProps {
   threadKey: string
@@ -980,12 +982,12 @@ function AssistantTurnFooter({
                       {entry.label}
                     </span>
                     {entry.added > 0 ? (
-                      <span className="shrink-0 font-medium text-emerald-500">
+                      <span className={cn("shrink-0 font-medium", vcsTextClassNames.added)}>
                         +{entry.added}
                       </span>
                     ) : null}
                     {entry.removed > 0 ? (
-                      <span className="shrink-0 font-medium text-red-500">
+                      <span className={cn("shrink-0 font-medium", vcsTextClassNames.deleted)}>
                         -{entry.removed}
                       </span>
                     ) : null}

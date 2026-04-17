@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react"
 import { DiffEditor } from "@monaco-editor/react"
 import type { editor } from "monaco-editor"
 import { getLanguageFromFilename } from "../utils/language"
-import { useTheme } from "@/features/shared/hooks"
+import { registerMonacoThemes, useAppearance } from "@/features/shared/appearance"
 
 interface DiffViewerProps {
   filename: string
@@ -13,7 +13,7 @@ interface DiffViewerProps {
 
 export function DiffViewer({ filename, original, modified, modelKey }: DiffViewerProps) {
   const language = getLanguageFromFilename(filename)
-  const theme = useTheme()
+  const { monacoThemeId } = useAppearance()
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const effectiveModelKey = modelKey ?? filename
 
@@ -42,7 +42,10 @@ export function DiffViewer({ filename, original, modified, modelKey }: DiffViewe
       modifiedModelPath={`inmemory://diff/${encodeURIComponent(effectiveModelKey)}.modified`}
       keepCurrentOriginalModel
       keepCurrentModifiedModel
-      theme={theme}
+      theme={monacoThemeId}
+      beforeMount={(monaco) => {
+        registerMonacoThemes(monaco)
+      }}
       onMount={(editorInstance) => {
         editorRef.current = editorInstance
       }}

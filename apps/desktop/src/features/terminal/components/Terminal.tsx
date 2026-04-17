@@ -8,6 +8,7 @@ import {
   type TerminalExitEvent,
   type TerminalStartResponse,
 } from "@/desktop/client"
+import { useAppearance } from "@/features/shared/appearance"
 import { cn } from "@/lib/utils"
 import { shouldRecoverTerminal, type TerminalRenderState } from "./terminalRecovery"
 import "@xterm/xterm/css/xterm.css"
@@ -108,6 +109,7 @@ export function Terminal({
   className,
   padded = true,
 }: TerminalProps) {
+  const { themeId, resolvedAppearance } = useAppearance()
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -299,16 +301,29 @@ export function Terminal({
   }, [fitTerminal, pushTerminalSize, repaintTerminal, scheduleTerminalRepaint, updateTheme])
 
   useEffect(() => {
+    updateTheme()
+    scheduleTerminalRepaint()
+  }, [resolvedAppearance, scheduleTerminalRepaint, themeId, updateTheme])
+
+  useEffect(() => {
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
-        if (mutation.attributeName === "class" || mutation.attributeName === "style") {
+        if (
+          mutation.attributeName === "class" ||
+          mutation.attributeName === "style" ||
+          mutation.attributeName === "data-theme" ||
+          mutation.attributeName === "data-appearance"
+        ) {
           updateTheme()
           scheduleTerminalRepaint()
         }
       }
     })
 
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style", "data-theme", "data-appearance"],
+    })
 
     return () => observer.disconnect()
   }, [scheduleTerminalRepaint, updateTheme])

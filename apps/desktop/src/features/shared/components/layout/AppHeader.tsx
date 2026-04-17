@@ -658,11 +658,11 @@ export function SourceControlActionGroup({
       onClick={() => void runQuickAction()}
       disabled={isBusy || quickAction.disabled}
       className={cn(
-        "h-7 rounded-r-none border-r-0 shadow-none",
+        "h-7 rounded-r-none border-r-0 border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
         quickAction.tone === "warning" &&
-          "border-amber-500/50 bg-amber-500/10 text-amber-950 hover:bg-amber-500/15 hover:text-amber-950 dark:text-amber-100 dark:hover:bg-amber-500/20 dark:hover:text-amber-50",
+          "border-[color:var(--color-warning-border)] bg-[color:var(--color-warning-surface)] text-[color:var(--color-warning-surface-foreground)] hover:bg-[color:var(--color-warning-surface)]/85 hover:text-[color:var(--color-warning-surface-foreground)]",
         quickAction.tone === "danger" &&
-          "border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive dark:hover:bg-destructive/20",
+          "border-[color:var(--color-destructive-border)] bg-[color:var(--color-destructive-surface)] text-[color:var(--color-destructive-surface-foreground)] hover:bg-[color:var(--color-destructive-surface)]/85 hover:text-[color:var(--color-destructive-surface-foreground)]",
         feedbackTone === "error" && feedbackMessage ? "border-destructive/50" : undefined,
         className
       )}
@@ -720,7 +720,7 @@ export function SourceControlActionGroup({
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  className="h-7 w-8 rounded-l-none shadow-none"
+                  className="h-7 w-8 rounded-l-none border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]"
                   aria-label="Open git actions menu"
                   disabled={isBusy}
                 />
