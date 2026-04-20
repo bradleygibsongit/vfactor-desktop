@@ -50,13 +50,28 @@ export function LoadingDots({ className, variant = "loading" }: LoadingDotsProps
               borderRadius: "50%",
               backgroundColor: isAttention ? "rgb(251 191 36)" : "currentColor",
               opacity: isVisible ? undefined : 0,
-              animation: isVisible
+              animationName: isVisible
                 ? isAttention
-                  ? "dot-attention 600ms ease-in-out infinite"
+                  ? "dot-attention"
                   : isConnecting
-                    ? "dot-connect 1600ms ease-in-out infinite"
-                    : "dot-pulse 700ms cubic-bezier(0.36, 0, 0.66, 1) infinite"
+                    ? "dot-connect"
+                    : "dot-pulse"
                 : "none",
+              animationDuration: isVisible
+                ? isAttention
+                  ? "600ms"
+                  : isConnecting
+                    ? "1600ms"
+                    : "700ms"
+                : undefined,
+              animationTimingFunction: isVisible
+                ? isAttention
+                  ? "ease-in-out"
+                  : isConnecting
+                    ? "ease-in-out"
+                    : "cubic-bezier(0.36, 0, 0.66, 1)"
+                : undefined,
+              animationIterationCount: isVisible ? "infinite" : undefined,
               animationDelay: isAttention ? "0ms" : `${animationOrder * (isConnecting ? 90 : 60)}ms`,
             }}
           />

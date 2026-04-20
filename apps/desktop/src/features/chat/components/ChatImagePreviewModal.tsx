@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { desktop } from "@/desktop/client"
+import { feedbackSurfaceClassName } from "@/features/shared/appearance"
 import {
   Dialog,
   DialogBody,
@@ -7,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/features/shared/components/ui/dialog"
+import { cn } from "@/lib/utils"
 
 export interface ChatImagePreview {
   absolutePath: string
@@ -77,7 +79,7 @@ export function ChatImagePreviewModal({
         </DialogHeader>
         <DialogBody className="flex min-h-[320px] items-center justify-center bg-muted/35 p-5">
           {error ? (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+            <div className={cn(feedbackSurfaceClassName("destructive"), "rounded-xl px-4 py-3 text-sm")}>
               {error}
             </div>
           ) : src ? (

@@ -1,7 +1,9 @@
+import type * as React from "react"
 import type {
   AppUpdateActionResult,
   AppUpdateCheckResult,
   AppUpdateState,
+  AppWindowThemeSyncInput,
   CopyPathsIntoDirectoryOptions,
   DesktopDirEntry,
   GitActionProgressEvent,
@@ -44,6 +46,15 @@ import type {
 } from "./contracts"
 
 declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        partition?: string
+        src?: string
+      }
+    }
+  }
+
   interface Window {
     nucleus: {
       app: {
@@ -52,6 +63,7 @@ declare global {
         checkForUpdates: () => Promise<AppUpdateCheckResult>
         installUpdate: (options?: { force?: boolean }) => Promise<AppUpdateActionResult>
         dismissUpdate: () => Promise<AppUpdateState>
+        syncWindowTheme: (input: AppWindowThemeSyncInput) => Promise<void>
         onUpdateState: (listener: (state: AppUpdateState) => void) => () => void
       }
       dialog: {

@@ -1,5 +1,5 @@
-import asciiArtBackground from "@/assets/backgrounds/ascii-art.png"
 import { CheckCircle, Circle, Plus } from "@/components/icons"
+import { feedbackIconClassName } from "@/features/shared/appearance"
 import { useCurrentProjectWorktree } from "@/features/shared/hooks"
 import { ProjectIcon } from "@/features/workspace/components/ProjectIcon"
 import { resolveProjectIconPath } from "@/features/workspace/utils/projectIcon"
@@ -20,7 +20,7 @@ function WorkspaceSetupStepRow({
       <div className="flex flex-col items-center">
         <div className="flex size-5 shrink-0 items-center justify-center">
           {step.status === "completed" ? (
-            <CheckCircle className="size-[18px] text-emerald-400" />
+            <CheckCircle className={feedbackIconClassName("success") + " size-[18px]"} />
           ) : step.status === "active" ? (
             <Loader size={16} className="text-foreground/84" />
           ) : step.status === "error" ? (
@@ -33,7 +33,7 @@ function WorkspaceSetupStepRow({
           <div
             className={
               step.status === "completed"
-                ? "mt-1 h-4 w-px bg-emerald-400/40"
+                ? "mt-1 h-4 w-px bg-[color:var(--color-vcs-added)]/40"
                 : "mt-1 h-4 w-px bg-muted-foreground/16"
             }
           />
@@ -68,19 +68,7 @@ export function NewWorkspaceSetupView() {
     null
 
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <img
-          src={asciiArtBackground}
-          alt=""
-          aria-hidden="true"
-          className="h-full w-full object-cover object-center opacity-88"
-          draggable={false}
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(2,8,23,0.22)_44%,rgba(2,6,23,0.82)_100%)]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/58 via-black/28 to-background/72" />
-      </div>
-
+    <div className="chat-start-surface relative flex h-full w-full flex-col items-center justify-center overflow-hidden">
       <div className="relative z-10 flex w-full max-w-[803px] flex-col items-center gap-6 px-10">
         {hasSteps ? (
           <>

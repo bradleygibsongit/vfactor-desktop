@@ -3,16 +3,8 @@ import { createRoot } from "react-dom/client"
 
 import "./index.css"
 import App from "./App.tsx"
+import { bootstrapAppearance } from "@/features/shared/appearance"
 import { TooltipProvider } from "@/features/shared/components/ui/tooltip"
-
-// Apply system theme preference
-function applyTheme() {
-  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-  document.documentElement.classList.toggle("dark", isDark)
-}
-
-// Apply on load
-applyTheme()
 
 // Disable tab-key focus cycling globally
 window.addEventListener("keydown", (e) => {
@@ -21,13 +13,16 @@ window.addEventListener("keydown", (e) => {
   }
 })
 
-// Listen for system theme changes
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme)
+async function startApp() {
+  await bootstrapAppearance()
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <TooltipProvider>
-      <App />
-    </TooltipProvider>
-  </StrictMode>
-)
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <TooltipProvider>
+        <App />
+      </TooltipProvider>
+    </StrictMode>
+  )
+}
+
+void startApp()

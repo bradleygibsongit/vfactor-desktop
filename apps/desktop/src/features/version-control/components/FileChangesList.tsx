@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { CaretDown, CaretRight, ChevronDownIcon, Square, SquareMinus, SquarePlus, type Icon } from "@/components/icons"
+import { vcsTextClassNames } from "@/features/shared/appearance"
 import { cn } from "@/lib/utils"
 import type { FileChange, FileStatus } from "../types"
 
@@ -29,13 +30,13 @@ const statusIcons: Record<FileStatus, Icon> = {
 }
 
 const iconColors: Record<FileStatus, string> = {
-  modified: "text-amber-400",
-  added: "text-green-500",
-  deleted: "text-red-500",
-  untracked: "text-zinc-500",
-  renamed: "text-purple-500",
-  copied: "text-green-500",
-  ignored: "text-zinc-500",
+  modified: vcsTextClassNames.modified,
+  added: vcsTextClassNames.added,
+  deleted: vcsTextClassNames.deleted,
+  untracked: vcsTextClassNames.ignored,
+  renamed: vcsTextClassNames.renamed,
+  copied: vcsTextClassNames.added,
+  ignored: vcsTextClassNames.ignored,
 }
 
 interface DirectoryGroup {
@@ -257,12 +258,12 @@ function DirectoryGroupSection({
             {group.files.length}
           </span>
           {group.totalAdditions > 0 && (
-            <span className="shrink-0 text-xs text-green-500">
+            <span className={cn("shrink-0 text-xs", vcsTextClassNames.added)}>
               +{group.totalAdditions}
             </span>
           )}
           {group.totalDeletions > 0 && (
-            <span className="shrink-0 text-xs text-red-500">
+            <span className={cn("shrink-0 text-xs", vcsTextClassNames.deleted)}>
               -{group.totalDeletions}
             </span>
           )}
@@ -316,10 +317,10 @@ function FileRow({
           {statusIndicators[file.status]}
         </span>
         {file.additions !== undefined && file.additions > 0 && (
-          <span className="text-green-500">+{file.additions}</span>
+          <span className={vcsTextClassNames.added}>+{file.additions}</span>
         )}
         {file.deletions !== undefined && file.deletions > 0 && (
-          <span className="text-red-500">-{file.deletions}</span>
+          <span className={vcsTextClassNames.deleted}>-{file.deletions}</span>
         )}
         <StatusIcon
           size={12}

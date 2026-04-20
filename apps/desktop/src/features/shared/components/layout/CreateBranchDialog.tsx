@@ -138,7 +138,7 @@ export function CreateBranchDialog({
               }}
             />
             {errorMessage ? (
-              <p className="text-sm text-[#F08BA7]">{errorMessage}</p>
+              <p className="text-sm text-[color:var(--color-destructive)]">{errorMessage}</p>
             ) : (
               <p className="text-sm text-muted-foreground">
                 Slashes are fine here. We&apos;ll skip the prefix prefill for now.

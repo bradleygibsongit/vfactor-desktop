@@ -15,6 +15,7 @@ import {
   CircleNotch,
   CheckCircle,
 } from "@/components/icons"
+import { feedbackIconClassName } from "@/features/shared/appearance"
 import { cn } from "@/lib/utils"
 import { AgentActivityToolSDK } from "./AgentActivityToolSDK"
 import type { RuntimeToolPart, RuntimeSession } from "../../types"
@@ -103,7 +104,7 @@ export function AgentActivitySubagent({
         {isActive ? (
           <CircleNotch className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
         ) : (
-          <CheckCircle className="size-3.5 shrink-0 text-green-500" />
+          <CheckCircle className={cn("size-3.5 shrink-0", feedbackIconClassName("success"))} />
         )}
       </button>
 

@@ -9,6 +9,7 @@
  */
 
 import { useState } from "react";
+import { vcsTextClassNames } from "@/features/shared/appearance"
 import {
   FileText,
   PencilSimple,
@@ -89,8 +90,8 @@ function ToolContent({ content }: { content: ToolCallContent[] }) {
             <div key={index}>
               <div className="text-muted-foreground mb-1 font-medium">Diff: {item.path}</div>
               <div className="bg-muted/50 rounded p-2 overflow-x-auto font-mono">
-                <pre className="text-red-400 line-through">{item.oldText || "(empty)"}</pre>
-                <pre className="text-green-400">{item.newText || "(empty)"}</pre>
+                <pre className={cn(vcsTextClassNames.deleted, "line-through")}>{item.oldText || "(empty)"}</pre>
+                <pre className={vcsTextClassNames.added}>{item.newText || "(empty)"}</pre>
               </div>
             </div>
           );

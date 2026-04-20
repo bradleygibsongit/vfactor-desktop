@@ -1,22 +1,5 @@
-import { useEffect, useState } from "react"
+import { useAppearance } from "@/features/shared/appearance"
 
 export function useTheme() {
-  const [isDark, setIsDark] = useState(() =>
-    document.documentElement.classList.contains("dark")
-  )
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains("dark"))
-    })
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
-  return isDark ? "vs-dark" : "light"
+  return useAppearance().monacoThemeId
 }

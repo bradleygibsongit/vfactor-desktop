@@ -13,6 +13,14 @@ import {
   FieldGroup,
   FieldTitle,
 } from "@/features/shared/components/ui/field"
+import { ButtonGroup, ButtonGroupText } from "@/features/shared/components/ui/button-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/features/shared/components/ui/select"
 import { SearchableSelect } from "@/features/shared/components/ui/searchable-select"
 import { Switch } from "@/features/shared/components/ui/switch"
 import { Textarea } from "@/features/shared/components/ui/textarea"
@@ -20,6 +28,15 @@ import { getHarnessDefinition } from "@/features/chat/runtime/harnesses"
 import { useModels } from "@/features/chat/hooks/useModels"
 import { getRuntimeModelLabel } from "@/features/chat/domain/runtimeModels"
 import type { HarnessId, RuntimeModel } from "@/features/chat/types"
+import {
+  DEFAULT_TEXT_SIZE_PX,
+  DEFAULT_THEME_ID,
+  MAX_TEXT_SIZE_PX,
+  MIN_TEXT_SIZE_PX,
+  TEXT_SIZE_STEP_PX,
+  THEME_OPTIONS,
+  useAppearance,
+} from "@/features/shared/appearance"
 import {
   resolveEffectiveComposerModelId,
 } from "@/features/chat/components/chatInputModelSelection"
@@ -266,6 +283,128 @@ function GitSettingsSection() {
   )
 }
 
+function AppearanceSettingsSection() {
+  const appearanceThemeId = useSettingsStore((state) => state.appearanceThemeId)
+  const appearanceTextSizePx = useSettingsStore((state) => state.appearanceTextSizePx)
+  const hasLoaded = useSettingsStore((state) => state.hasLoaded)
+  const initialize = useSettingsStore((state) => state.initialize)
+  const setAppearanceThemeId = useSettingsStore((state) => state.setAppearanceThemeId)
+  const resetAppearanceThemeId = useSettingsStore((state) => state.resetAppearanceThemeId)
+  const setAppearanceTextSizePx = useSettingsStore((state) => state.setAppearanceTextSizePx)
+  const resetAppearanceTextSizePx = useSettingsStore((state) => state.resetAppearanceTextSizePx)
+  const { resolvedAppearance, resolvedThemeId, monacoThemeId, pierreDiffTheme } = useAppearance()
+
+  useEffect(() => {
+    void initialize()
+  }, [initialize])
+
+  const isSettingsLoading = !hasLoaded
+  const canDecreaseTextSize = appearanceTextSizePx > MIN_TEXT_SIZE_PX
+  const canIncreaseTextSize = appearanceTextSizePx < MAX_TEXT_SIZE_PX
+  const resolvedThemeLabel =
+    THEME_OPTIONS.find((option) => option.id === resolvedThemeId)?.label ?? resolvedThemeId
+
+  return (
+    <section className="rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm">
+      <div className="space-y-5 px-4 py-4">
+        <div className="space-y-1">
+          <h2 className="text-sm font-medium text-card-foreground">App appearance</h2>
+          <p className="text-sm text-muted-foreground">
+            Theme and interface text size apply across the whole desktop app and stay local to this installation.
+          </p>
+        </div>
+
+        <FieldGroup className="gap-4">
+          <Field>
+            <FieldTitle>Theme</FieldTitle>
+            <FieldDescription>
+              Choose a fixed theme or follow the operating system with the Nucleus light and dark pair.
+            </FieldDescription>
+            <Select
+              value={appearanceThemeId}
+              onValueChange={(value) => setAppearanceThemeId(value as typeof appearanceThemeId)}
+            >
+              <SelectTrigger className="mt-2 w-full" disabled={isSettingsLoading}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start">
+                {THEME_OPTIONS.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {appearanceThemeId === "system"
+                ? `Following system ${resolvedAppearance} mode using ${resolvedThemeLabel}.`
+                : `${resolvedThemeLabel} is active with ${resolvedAppearance} appearance.`}
+            </p>
+          </Field>
+
+          <Field>
+            <FieldTitle>Interface text size</FieldTitle>
+            <FieldDescription>
+              Scales shared app chrome like settings, menus, sidebars, notices, and controls without changing editor or terminal fonts.
+            </FieldDescription>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <ButtonGroup>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isSettingsLoading || !canDecreaseTextSize}
+                  onClick={() => setAppearanceTextSizePx(appearanceTextSizePx - TEXT_SIZE_STEP_PX)}
+                >
+                  -
+                </Button>
+                <ButtonGroupText className="min-w-[4.5rem] justify-center tabular-nums">
+                  {appearanceTextSizePx}px
+                </ButtonGroupText>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isSettingsLoading || !canIncreaseTextSize}
+                  onClick={() => setAppearanceTextSizePx(appearanceTextSizePx + TEXT_SIZE_STEP_PX)}
+                >
+                  +
+                </Button>
+              </ButtonGroup>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Range {MIN_TEXT_SIZE_PX}px to {MAX_TEXT_SIZE_PX}px. Default is {DEFAULT_TEXT_SIZE_PX}px.
+              </p>
+            </div>
+          </Field>
+
+          <Field>
+            <FieldTitle>Theme adapters</FieldTitle>
+            <FieldDescription>
+              Monaco and the PR patch viewer switch with appearance changes while the terminal continues reading CSS variables from the active theme.
+            </FieldDescription>
+            <div className="mt-2 rounded-lg border border-border/70 bg-background/45 px-3 py-3 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span>Resolved theme: <span className="font-medium text-foreground">{resolvedThemeLabel}</span></span>
+                <span>Monaco: <span className="font-medium text-foreground">{monacoThemeId}</span></span>
+                <span>Diffs: <span className="font-medium text-foreground">{pierreDiffTheme}</span></span>
+              </div>
+            </div>
+          </Field>
+        </FieldGroup>
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={resetAppearanceTextSizePx} disabled={isSettingsLoading || appearanceTextSizePx === DEFAULT_TEXT_SIZE_PX}>
+            Reset text size
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={resetAppearanceThemeId} disabled={isSettingsLoading || appearanceThemeId === DEFAULT_THEME_ID}>
+            Reset theme
+          </Button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function HarnessSettingsSection({ harnessId }: { harnessId: HarnessId }) {
   const isCodexHarness = harnessId === "codex"
   const harnessLabel = getHarnessDefinition(harnessId).label
@@ -457,6 +596,10 @@ function HarnessSettingsSection({ harnessId }: { harnessId: HarnessId }) {
 }
 
 function getSettingsSectionTitle(activeSection: SettingsSectionId): string {
+  if (activeSection === "appearance") {
+    return "Appearance"
+  }
+
   if (activeSection === "git") {
     return "Git"
   }
@@ -469,6 +612,10 @@ function getSettingsSectionTitle(activeSection: SettingsSectionId): string {
 }
 
 function renderSettingsSection(activeSection: SettingsSectionId) {
+  if (activeSection === "appearance") {
+    return <AppearanceSettingsSection />
+  }
+
   if (activeSection === "git") {
     return <GitSettingsSection />
   }

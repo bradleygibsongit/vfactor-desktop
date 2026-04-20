@@ -1,25 +1,38 @@
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 interface UseResizablePanelOptions {
   width: number
   setWidth: (width: number) => void
+  persistWidth?: () => void
   isCollapsed: boolean
   /** "left" = drag right increases width; "right" = drag left increases width */
   side: "left" | "right"
 }
 
-export function useResizablePanel({ width, setWidth, isCollapsed, side }: UseResizablePanelOptions) {
+export function useResizablePanel({
+  width,
+  setWidth,
+  persistWidth,
+  isCollapsed,
+  side,
+}: UseResizablePanelOptions) {
   const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const [isResizing, setIsResizing] = useState(false)
 
   const stopResizing = useCallback(() => {
+    const didResize = resizeStateRef.current !== null
     resizeStateRef.current = null
+    setIsResizing(false)
     document.documentElement.style.removeProperty("cursor")
     document.documentElement.style.removeProperty("user-select")
     document.documentElement.style.removeProperty("-webkit-user-select")
     document.body.style.removeProperty("cursor")
     document.body.style.removeProperty("user-select")
     document.body.style.removeProperty("-webkit-user-select")
-  }, [])
+    if (didResize) {
+      persistWidth?.()
+    }
+  }, [persistWidth])
 
   useEffect(() => {
     return () => {
@@ -66,6 +79,7 @@ export function useResizablePanel({ width, setWidth, isCollapsed, side }: UseRes
         startX: event.clientX,
         startWidth: width,
       }
+      setIsResizing(true)
 
       window.getSelection()?.removeAllRanges()
       document.documentElement.style.cursor = "col-resize"
@@ -79,5 +93,5 @@ export function useResizablePanel({ width, setWidth, isCollapsed, side }: UseRes
     [isCollapsed, width],
   )
 
-  return { handleResizeStart }
+  return { handleResizeStart, isResizing }
 }

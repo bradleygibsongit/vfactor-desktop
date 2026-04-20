@@ -2,6 +2,7 @@ import type {
   AppUpdateActionResult,
   AppUpdateCheckResult,
   AppUpdateState,
+  AppWindowThemeSyncInput,
   CopyPathsIntoDirectoryOptions,
   DesktopDirEntry,
   GitActionProgressEvent,
@@ -14,7 +15,10 @@ import type {
   GitPullRequestResolveReason,
   GitPullRequestChecksResponse,
   GitPullRequestCheck,
+  GitPullRequestComment,
   GitPullRequestCheckStatus,
+  GitPullRequestReviewComment,
+  GitPullRequestReview,
   GitPullResult,
   GitRenameWorktreeInput,
   GitRenameWorktreeResult,
@@ -77,6 +81,46 @@ export function loadDesktopStore(file: string): Promise<DesktopStoreHandle> {
   return Promise.resolve(new RendererStoreHandle(file))
 }
 
+function normalizePullRequestChecksResponse(
+  projectPath: string,
+  value: GitPullRequestChecksResponse
+): GitPullRequestChecksResponse {
+  const response = (value ?? {}) as Partial<GitPullRequestChecksResponse>
+  const checks = Array.isArray(response.checks) ? response.checks : []
+  const hasReviewsArray = Array.isArray(response.reviews)
+  const hasCommentsArray = Array.isArray(response.comments)
+  const hasReviewCommentsArray = Array.isArray(response.reviewComments)
+  const reviews = hasReviewsArray ? response.reviews : []
+  const comments = hasCommentsArray ? response.comments : []
+  const reviewComments = hasReviewCommentsArray ? response.reviewComments : []
+  const pullRequestNumber =
+    typeof response.pullRequestNumber === "number" ? response.pullRequestNumber : null
+  const error = response.error ?? null
+
+  if (!hasReviewsArray || !hasCommentsArray || !hasReviewCommentsArray) {
+    const legacyBridgeMessage =
+      "The desktop bridge is still using the older pull request checks payload. Restart the desktop dev process to load reviews and comments."
+
+    return {
+      checks,
+      reviews,
+      comments,
+      reviewComments,
+      pullRequestNumber,
+      error: error ? `${error} ${legacyBridgeMessage}` : legacyBridgeMessage,
+    }
+  }
+
+  return {
+    checks,
+    reviews,
+    comments,
+    reviewComments,
+    pullRequestNumber,
+    error,
+  }
+}
+
 export const desktop = {
   app: {
     getVersion: () => window.nucleus.app.getVersion(),
@@ -84,6 +128,15 @@ export const desktop = {
     checkForUpdates: () => window.nucleus.app.checkForUpdates(),
     installUpdate: (options?: { force?: boolean }) => window.nucleus.app.installUpdate(options),
     dismissUpdate: () => window.nucleus.app.dismissUpdate(),
+    syncWindowTheme: (input: AppWindowThemeSyncInput) => {
+      const syncWindowTheme = window.nucleus.app.syncWindowTheme
+      if (typeof syncWindowTheme !== "function") {
+        console.warn("[desktop.app] syncWindowTheme is unavailable in the current preload bridge")
+        return Promise.resolve()
+      }
+
+      return syncWindowTheme(input)
+    },
     onUpdateState: (listener: (state: AppUpdateState) => void) =>
       window.nucleus.app.onUpdateState(listener),
   },
@@ -178,12 +231,17 @@ export const desktop = {
         console.warn("[desktop.git] getPullRequestChecks is unavailable in the current preload bridge")
         return Promise.resolve({
           checks: [],
+          reviews: [],
+          comments: [],
+          reviewComments: [],
           pullRequestNumber: null,
           error: "Pull request checks are unavailable in the current desktop bridge.",
         })
       }
 
-      return getPullRequestChecks(projectPath)
+      return getPullRequestChecks(projectPath).then((result) =>
+        normalizePullRequestChecksResponse(projectPath, result)
+      )
     },
     listWorktrees: (projectPath: string) => window.nucleus.git.listWorktrees(projectPath),
     createWorktree: (projectPath: string, input: GitCreateWorktreeInput) =>
@@ -236,7 +294,9 @@ export type {
   GitPullRequestResolveReason,
   GitPullRequestChecksResponse,
   GitPullRequestCheck,
+  GitPullRequestComment,
   GitPullRequestCheckStatus,
+  GitPullRequestReview,
   GitPullResult,
   GitRenameWorktreeInput,
   GitRenameWorktreeResult,

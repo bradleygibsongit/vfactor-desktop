@@ -1,7 +1,6 @@
 import { ChatCircle, GitDiff, Terminal, X } from "@/components/icons"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/features/shared/components/ui/tooltip"
 import { LoadingDots } from "@/features/shared/components/ui/loading-dots"
 import { getFileIcon } from "@/features/editor/utils/fileIcons"
 import { ModelLogo, getHarnessLogoKind } from "./ModelLogo"
@@ -14,6 +13,7 @@ interface TabItemProps {
   activityStatus?: ChatStatus | null
   hasUnread?: boolean
   isActive: boolean
+  showActiveIndicator?: boolean
   onClick: () => void
   onClose?: () => void
 }
@@ -33,7 +33,7 @@ function TabIcon({
 }) {
   if (activityStatus === "connecting" || activityStatus === "streaming") {
     return (
-      <span className="flex size-4 items-center justify-center">
+      <span className="flex size-3.5 items-center justify-center">
         <LoadingDots
           variant={activityStatus === "connecting" ? "connecting" : "loading"}
           className="text-current"
@@ -44,13 +44,13 @@ function TabIcon({
 
   if (activityStatus === "error" || hasUnread) {
     return (
-      <span className="flex size-4 items-center justify-center">
+      <span className="flex size-3.5 items-center justify-center">
         <span
           className={cn(
             "block rounded-full",
             activityStatus === "error"
               ? "size-2 bg-destructive"
-              : "size-2 bg-amber-400"
+              : "size-2 bg-[color:var(--color-warning)]"
           )}
           aria-hidden="true"
         />
@@ -61,20 +61,20 @@ function TabIcon({
   switch (type) {
     case "file": {
       const FileIcon = getFileIcon(title)
-      return <FileIcon size={15} />
+      return <FileIcon size={14} />
     }
     case "diff":
-      return <GitDiff size={15} />
+      return <GitDiff size={14} />
     case "chat-session": {
       if (!harnessId) {
-        return <ChatCircle size={15} />
+        return <ChatCircle size={14} />
       }
 
       const logoKind = harnessId ? getHarnessLogoKind(harnessId) : "default"
-      return <ModelLogo kind={logoKind} className="size-4" />
+      return <ModelLogo kind={logoKind} className="size-3.5" />
     }
     case "terminal":
-      return <Terminal size={15} />
+      return <Terminal size={14} />
     default:
       return null
   }
@@ -87,6 +87,7 @@ export function TabItem({
   activityStatus,
   hasUnread,
   isActive,
+  showActiveIndicator = true,
   onClick,
   onClose,
 }: TabItemProps) {
@@ -95,51 +96,60 @@ export function TabItem({
     onClose?.()
   }
 
+  const showHoverClose = Boolean(onClose)
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div
-          role="tab"
-          tabIndex={0}
-          onClick={onClick}
-          onKeyDown={(e) => e.key === "Enter" && onClick()}
-          className={cn(
-            "group relative flex items-center gap-1.5 rounded-md px-2 py-1 text-xs cursor-pointer transition-colors",
-            isActive
-              ? "text-sidebar-accent-foreground"
-              : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
-          )}
-        >
-          {isActive && (
-            <motion.div
-              layoutId="activeTab"
-              className="absolute inset-0 rounded-md bg-sidebar-accent"
-              transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
-            />
-          )}
-          <span className="relative z-10 flex items-center gap-1.5">
-            <TabIcon
-              type={type}
-              title={title}
-              harnessId={harnessId}
-              activityStatus={activityStatus}
-              hasUnread={hasUnread}
-            />
-            <span className="truncate max-w-28">{title}</span>
-          </span>
-          {onClose && (
+    <div
+      role="tab"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}
+      className={cn(
+        "group relative isolate flex h-6 items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-[11px] leading-none cursor-pointer transition-colors",
+        isActive
+          ? "text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+      )}
+    >
+      {isActive && showActiveIndicator ? (
+        <motion.div
+          layoutId="chatActiveTab"
+          className="absolute inset-0 z-0 rounded-md bg-[var(--sidebar-item-active)]"
+          transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
+        />
+      ) : null}
+      <span className="relative z-10 flex items-center gap-1">
+        {showHoverClose ? (
+          <span className="relative flex size-3.5 items-center justify-center">
+            <span className="transition-opacity duration-150 group-hover:opacity-0">
+              <TabIcon
+                type={type}
+                title={title}
+                harnessId={harnessId}
+                activityStatus={activityStatus}
+                hasUnread={hasUnread}
+              />
+            </span>
             <button
               type="button"
               onClick={handleClose}
-              className="relative z-10 ml-0.5 -mr-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-muted/60 transition-opacity"
+              className="pointer-events-none absolute inset-0 flex items-center justify-center rounded opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 hover:bg-muted/60 focus-visible:pointer-events-auto focus-visible:opacity-100"
               aria-label={`Close ${title}`}
             >
-              <X size={10} />
+              <X size={9} />
             </button>
-          )}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{title}</TooltipContent>
-    </Tooltip>
+          </span>
+        ) : (
+          <TabIcon
+            type={type}
+            title={title}
+            harnessId={harnessId}
+            activityStatus={activityStatus}
+            hasUnread={hasUnread}
+          />
+        )}
+        <span className="truncate max-w-20">{title}</span>
+      </span>
+    </div>
   )
 }
