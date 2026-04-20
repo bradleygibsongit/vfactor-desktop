@@ -205,7 +205,7 @@ function NoWorkspaceSelectedState({
 
   return (
     <div className="chat-start-surface flex h-full items-center justify-center px-6 py-8">
-      <div className="flex h-[calc(100vh-5rem)] max-h-[720px] min-h-[420px] w-full max-w-[682px] min-w-0 flex-col text-sidebar-foreground">
+      <div className="flex h-[calc(100vh-5rem)] max-h-[720px] min-h-[420px] w-full max-w-[784px] min-w-0 flex-col text-sidebar-foreground">
         <div className="flex items-start justify-between gap-4 px-5 py-4">
           <div className="min-w-0">
             <h1 className="font-pixel text-[26px] tracking-tight text-sidebar-foreground">

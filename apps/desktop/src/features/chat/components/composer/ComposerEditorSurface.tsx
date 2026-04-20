@@ -17,7 +17,6 @@ interface ComposerEditorSurfaceProps {
     editorState: () => void
   }
   isLocked: boolean
-  isStreaming: boolean
   onChange: (editorState: EditorState) => void
   onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void
   onPaste?: (event: ReactClipboardEvent<HTMLDivElement>) => void
@@ -33,7 +32,7 @@ interface ComposerEditorSurfaceProps {
 export function ComposerEditorSurface({
   editorRef,
   initialConfig,
-  isStreaming,
+  isLocked,
   onChange,
   onKeyDown,
   onPaste,
@@ -47,7 +46,7 @@ export function ComposerEditorSurface({
 }: ComposerEditorSurfaceProps) {
   return (
     <LexicalComposer initialConfig={initialConfig}>
-      <ComposerEditorRefPlugin editorRef={editorRef} isStreaming={isStreaming} />
+      <ComposerEditorRefPlugin editorRef={editorRef} isLocked={isLocked} />
       <OnChangePlugin onChange={onChange} />
       <HistoryPlugin />
       <PlainTextPlugin

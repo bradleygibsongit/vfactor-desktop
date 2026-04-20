@@ -4,10 +4,10 @@ import type { LexicalEditor } from "lexical"
 
 export function ComposerEditorRefPlugin({
   editorRef,
-  isStreaming = false,
+  isLocked = false,
 }: {
   editorRef: MutableRefObject<LexicalEditor | null>
-  isStreaming?: boolean
+  isLocked?: boolean
 }) {
   const [editor] = useLexicalComposerContext()
 
@@ -22,8 +22,8 @@ export function ComposerEditorRefPlugin({
   }, [editor, editorRef])
 
   useEffect(() => {
-    editor.setEditable(!isStreaming)
-  }, [editor, isStreaming])
+    editor.setEditable(!isLocked)
+  }, [editor, isLocked])
 
   return null
 }

@@ -1,10 +1,12 @@
-import type {
-  HarnessPromptInput,
-  HarnessTurnInput,
-  HarnessTurnResult,
-  RuntimeModel,
-  RuntimePrompt,
-  RuntimeSession,
+import {
+  DEFAULT_RUNTIME_MODE,
+  type HarnessPromptInput,
+  type HarnessTurnInput,
+  type HarnessTurnResult,
+  type RuntimeModel,
+  type RuntimeModeKind,
+  type RuntimePrompt,
+  type RuntimeSession,
 } from "@/features/chat/types"
 import { getRuntimeModelLabel } from "@/features/chat/domain/runtimeModels"
 import { getRemoteSessionId } from "@/features/chat/domain/runtimeSessions"
@@ -36,15 +38,19 @@ import {
   type CodexPendingUserInputRequest,
 } from "@/features/chat/runtime/codexPrompts"
 import { waitForCodexTurnCompletion } from "@/features/chat/runtime/codexTurnTracker"
-import type { GitService } from "../git"
 import type { CodexServerService } from "../codexServer"
 import { MainCodexRpcClient } from "./codexRpcClient"
 import type { RuntimeProviderAdapter, RuntimeProviderContext } from "./providerTypes"
 
 type CodexSessionPermissionPreset = {
-  approvalPolicy: "on-request"
-  sandbox: "read-only" | "workspace-write"
+  approvalPolicy: "unlessTrusted" | "on-request" | "never"
+  sandbox: "read-only" | "workspace-write" | "danger-full-access"
 }
+
+type CodexTurnSandboxPolicy =
+  | { type: "readOnly" }
+  | { type: "workspaceWrite" }
+  | { type: "dangerFullAccess" }
 
 const CODEX_REASONING_SUMMARY = "detailed" as const
 const CODEX_MODEL_CACHE_TTL_MS = 30 * 60 * 1000
@@ -96,21 +102,38 @@ function isUnsupportedReasoningSummaryError(error: unknown): boolean {
   )
 }
 
-async function getDefaultCodexSessionPermissionPreset(
-  gitService: GitService,
-  projectPath: string
-): Promise<CodexSessionPermissionPreset> {
-  try {
-    await gitService.getBranches(projectPath)
-    return {
-      approvalPolicy: "on-request",
-      sandbox: "workspace-write",
-    }
-  } catch {
-    return {
-      approvalPolicy: "on-request",
-      sandbox: "read-only",
-    }
+function getCodexSessionPermissionPreset(
+  runtimeMode: RuntimeModeKind
+): CodexSessionPermissionPreset {
+  switch (runtimeMode) {
+    case "approval-required":
+      return {
+        approvalPolicy: "unlessTrusted",
+        sandbox: "read-only",
+      }
+    case "auto-accept-edits":
+      return {
+        approvalPolicy: "on-request",
+        sandbox: "workspace-write",
+      }
+    case "full-access":
+    default:
+      return {
+        approvalPolicy: "never",
+        sandbox: "danger-full-access",
+      }
+  }
+}
+
+function getCodexTurnSandboxPolicy(runtimeMode: RuntimeModeKind): CodexTurnSandboxPolicy {
+  switch (runtimeMode) {
+    case "approval-required":
+      return { type: "readOnly" }
+    case "auto-accept-edits":
+      return { type: "workspaceWrite" }
+    case "full-access":
+    default:
+      return { type: "dangerFullAccess" }
   }
 }
 
@@ -119,6 +142,7 @@ export class CodexRuntimeProvider implements RuntimeProviderAdapter {
 
   private rpc: MainCodexRpcClient
   private activeTurns = new Map<string, string>()
+  private knownThreads = new Set<string>()
   private pendingUserInputRequests = new Map<string, CodexPendingUserInputRequest>()
   private pendingApprovalRequests = new Map<string, CodexPendingApprovalRequest>()
   private pendingApprovalNotificationPrompts = new Map<string, RuntimePrompt>()
@@ -129,25 +153,27 @@ export class CodexRuntimeProvider implements RuntimeProviderAdapter {
 
   constructor(
     private readonly context: RuntimeProviderContext,
-    private readonly gitService: GitService,
     codexServerService: CodexServerService
   ) {
     this.rpc = new MainCodexRpcClient(codexServerService)
   }
 
-  async createSession(projectPath: string): Promise<RuntimeSession> {
-    await this.rpc.connect()
-    const permissionPreset = await getDefaultCodexSessionPermissionPreset(this.gitService, projectPath)
-
-    const response = await this.rpc.request<{ thread: CodexThread }>("thread/start", {
-      cwd: projectPath,
-      approvalPolicy: permissionPreset.approvalPolicy,
-      sandbox: permissionPreset.sandbox,
-      experimentalRawEvents: false,
-      persistExtendedHistory: false,
+  async createSession(
+    projectPath: string,
+    options?: { runtimeMode?: RuntimeModeKind }
+  ): Promise<RuntimeSession> {
+    const runtimeMode = options?.runtimeMode ?? DEFAULT_RUNTIME_MODE
+    const response = await this.openThread({
+      projectPath,
+      runtimeMode,
     })
+    const session = mapThreadToSession(response.thread)
+    const remoteId = getRemoteSessionId(session)
 
-    return mapThreadToSession(response.thread)
+    this.knownThreads.add(remoteId)
+    await this.persistSession(remoteId, projectPath, runtimeMode)
+
+    return session
   }
 
   async listAgents() {
@@ -232,6 +258,8 @@ export class CodexRuntimeProvider implements RuntimeProviderAdapter {
 
   async sendTurn(input: HarnessTurnInput): Promise<HarnessTurnResult> {
     const threadId = getRemoteSessionId(input.session)
+    await this.ensureThreadReady(input, threadId)
+
     const requestedModel = input.model?.trim() || null
     const shouldIncludeReasoningSummary = requestedModel
       ? !this.modelsWithoutReasoningSummary.has(requestedModel)
@@ -297,9 +325,14 @@ export class CodexRuntimeProvider implements RuntimeProviderAdapter {
     threadId: string,
     includeReasoningSummary: boolean
   ): Promise<CodexTurnStartResponse> {
+    const runtimeMode = input.runtimeMode ?? input.session.runtimeMode ?? DEFAULT_RUNTIME_MODE
+    const permissionPreset = getCodexSessionPermissionPreset(runtimeMode)
+
     return this.rpc.request<CodexTurnStartResponse>("turn/start", {
       threadId,
       cwd: input.projectPath ?? input.session.projectPath ?? null,
+      approvalPolicy: permissionPreset.approvalPolicy,
+      sandboxPolicy: getCodexTurnSandboxPolicy(runtimeMode),
       model: input.model ?? null,
       effort: mapReasoningEffort(input.reasoningEffort),
       serviceTier: mapCodexFastModeToServiceTier(input.fastMode),
@@ -321,6 +354,86 @@ export class CodexRuntimeProvider implements RuntimeProviderAdapter {
           text_elements: [],
         },
       ],
+    })
+  }
+
+  private async openThread(input: {
+    projectPath: string
+    runtimeMode: RuntimeModeKind
+    resumeThreadId?: string
+  }): Promise<{ thread: CodexThread }> {
+    await this.rpc.connect()
+
+    const permissionPreset = getCodexSessionPermissionPreset(input.runtimeMode)
+    const params = {
+      cwd: input.projectPath,
+      approvalPolicy: permissionPreset.approvalPolicy,
+      sandbox: permissionPreset.sandbox,
+      experimentalRawEvents: false,
+      persistExtendedHistory: false,
+    }
+
+    if (input.resumeThreadId) {
+      return this.rpc.request<{ thread: CodexThread }>("thread/resume", {
+        threadId: input.resumeThreadId,
+        ...params,
+      })
+    }
+
+    return this.rpc.request<{ thread: CodexThread }>("thread/start", params)
+  }
+
+  private async ensureThreadReady(input: HarnessTurnInput, threadId: string): Promise<void> {
+    if (this.knownThreads.has(threadId)) {
+      return
+    }
+
+    const persisted = await this.context.persistence.load(threadId)
+    const persistedState =
+      persisted?.harnessId === this.harnessId && persisted.state && typeof persisted.state === "object"
+        ? (persisted.state as { runtimeMode?: RuntimeModeKind | null })
+        : null
+    const projectPath = input.projectPath ?? input.session.projectPath ?? persisted?.projectPath ?? ""
+    const runtimeMode =
+      input.runtimeMode ??
+      input.session.runtimeMode ??
+      persistedState?.runtimeMode ??
+      DEFAULT_RUNTIME_MODE
+
+    if (!projectPath) {
+      return
+    }
+
+    try {
+      const resumed = await this.openThread({
+        projectPath,
+        runtimeMode,
+        resumeThreadId: threadId,
+      })
+      const resumedThreadId = resumed.thread.id || threadId
+      this.knownThreads.add(threadId)
+      this.knownThreads.add(resumedThreadId)
+      await this.persistSession(resumedThreadId, projectPath, runtimeMode)
+    } catch (error) {
+      console.warn("[codexProvider] Failed to resume thread before send; continuing without recovery.", {
+        threadId,
+        error: extractErrorText(error),
+      })
+    }
+  }
+
+  private async persistSession(
+    remoteId: string,
+    projectPath: string,
+    runtimeMode: RuntimeModeKind
+  ): Promise<void> {
+    await this.context.persistence.save(remoteId, {
+      harnessId: this.harnessId,
+      projectPath,
+      state: {
+        runtimeMode,
+      },
+      updatedAt: Date.now(),
     })
   }
 
@@ -430,7 +543,9 @@ export class CodexRuntimeProvider implements RuntimeProviderAdapter {
     return this.activeTurns.size
   }
 
-  dispose(): void {}
+  dispose(): void {
+    this.knownThreads.clear()
+  }
 
   private async readTurn(threadId: string, turnId: string): Promise<CodexTurn | undefined> {
     try {

@@ -20,7 +20,6 @@ import type {
 } from "@/desktop/contracts"
 import { EVENT_CHANNELS } from "../../ipc/channels"
 import { CodexServerService } from "../codexServer"
-import { GitService } from "../git"
 import { JsonStoreService } from "../store"
 import { ClaudeRuntimeProvider } from "./claudeProvider"
 import { CodexRuntimeProvider } from "./codexProvider"
@@ -36,7 +35,7 @@ export class RuntimeService {
   constructor(
     private readonly sendEvent: EventSender,
     storeService: JsonStoreService,
-    gitService: GitService,
+    _gitService: unknown,
     codexServerService: CodexServerService
   ) {
     this.sessionStore = new RuntimeSessionStore(storeService)
@@ -57,14 +56,16 @@ export class RuntimeService {
     }
 
     this.providers = {
-      codex: new CodexRuntimeProvider(context, gitService, codexServerService),
+      codex: new CodexRuntimeProvider(context, codexServerService),
       "claude-code": new ClaudeRuntimeProvider(context),
     }
   }
 
   async createSession(input: RuntimeCreateSessionInput): Promise<RuntimeSessionResult> {
     return {
-      session: await this.getProvider(input.harnessId).createSession(input.projectPath),
+      session: await this.getProvider(input.harnessId).createSession(input.projectPath, {
+        runtimeMode: input.runtimeMode,
+      }),
     }
   }
 
@@ -135,6 +136,7 @@ export class RuntimeService {
       text: input.text,
       agent: input.agent,
       collaborationMode: input.collaborationMode,
+      runtimeMode: input.runtimeMode,
       model: input.model,
       reasoningEffort: input.reasoningEffort,
       fastMode: input.fastMode,

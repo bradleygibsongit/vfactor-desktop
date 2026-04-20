@@ -14,18 +14,20 @@ import {
   type SDKUserMessage,
   type SlashCommand as ClaudeSlashCommand,
 } from "@anthropic-ai/claude-agent-sdk"
-import type {
-  HarnessPromptInput,
-  HarnessTurnInput,
-  HarnessTurnResult,
-  RuntimeAgent,
-  RuntimeCommand,
-  RuntimeMessagePart,
-  RuntimeModel,
-  RuntimePrompt,
-  RuntimePromptQuestion,
-  RuntimePromptResponse,
-  RuntimeSession,
+import {
+  DEFAULT_RUNTIME_MODE,
+  type HarnessPromptInput,
+  type HarnessTurnInput,
+  type HarnessTurnResult,
+  type RuntimeAgent,
+  type RuntimeCommand,
+  type RuntimeMessagePart,
+  type RuntimeModel,
+  type RuntimeModeKind,
+  type RuntimePrompt,
+  type RuntimePromptQuestion,
+  type RuntimePromptResponse,
+  type RuntimeSession,
 } from "@/features/chat/types"
 import type { RuntimeProviderAdapter, RuntimeProviderContext } from "./providerTypes"
 
@@ -215,9 +217,22 @@ function extractAssistantText(content: unknown): string {
 }
 
 function mapClaudePermissionMode(
-  collaborationMode: HarnessTurnInput["collaborationMode"]
+  collaborationMode: HarnessTurnInput["collaborationMode"],
+  runtimeMode: RuntimeModeKind
 ): PermissionMode {
-  return collaborationMode === "plan" ? "plan" : "default"
+  if (collaborationMode === "plan") {
+    return "plan"
+  }
+
+  switch (runtimeMode) {
+    case "auto-accept-edits":
+      return "acceptEdits"
+    case "full-access":
+      return "bypassPermissions"
+    case "approval-required":
+    default:
+      return "default"
+  }
 }
 
 function getPromptQuestionKind(definition: Record<string, unknown>): RuntimePromptQuestion["kind"] {
@@ -462,12 +477,16 @@ export class ClaudeRuntimeProvider implements RuntimeProviderAdapter {
 
   constructor(private readonly context: RuntimeProviderContext) {}
 
-  async createSession(projectPath: string): Promise<RuntimeSession> {
+  async createSession(
+    projectPath: string,
+    options?: { runtimeMode?: RuntimeModeKind }
+  ): Promise<RuntimeSession> {
     const remoteId = `claude-${randomUUID()}`
     const session: RuntimeSession = {
       id: remoteId,
       remoteId,
       harnessId: this.harnessId,
+      runtimeMode: options?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
       projectPath,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -478,7 +497,10 @@ export class ClaudeRuntimeProvider implements RuntimeProviderAdapter {
       projectPath,
       claudeSessionId: undefined,
       model: null,
-      permissionMode: "default",
+      permissionMode: mapClaudePermissionMode(
+        undefined,
+        options?.runtimeMode ?? DEFAULT_RUNTIME_MODE
+      ),
       fastMode: false,
       promptQueue: null,
       query: null,
@@ -560,7 +582,10 @@ export class ClaudeRuntimeProvider implements RuntimeProviderAdapter {
     }
 
     state.model = input.model ?? state.model ?? null
-    state.permissionMode = mapClaudePermissionMode(input.collaborationMode)
+    state.permissionMode = mapClaudePermissionMode(
+      input.collaborationMode,
+      input.runtimeMode ?? input.session.runtimeMode ?? DEFAULT_RUNTIME_MODE
+    )
     state.fastMode =
       input.fastMode === true &&
       state.model != null &&
@@ -689,7 +714,10 @@ export class ClaudeRuntimeProvider implements RuntimeProviderAdapter {
         await state.query.setModel(input.model)
         state.model = input.model
       }
-      const nextPermissionMode = mapClaudePermissionMode(input.collaborationMode)
+      const nextPermissionMode = mapClaudePermissionMode(
+        input.collaborationMode,
+        input.runtimeMode ?? input.session.runtimeMode ?? DEFAULT_RUNTIME_MODE
+      )
       if (nextPermissionMode !== state.permissionMode) {
         await state.query.setPermissionMode(nextPermissionMode)
         state.permissionMode = nextPermissionMode
@@ -709,7 +737,10 @@ export class ClaudeRuntimeProvider implements RuntimeProviderAdapter {
       cwd: state.projectPath,
       model: requestedModel ?? undefined,
       resume: state.claudeSessionId,
-      permissionMode: mapClaudePermissionMode(input.collaborationMode),
+      permissionMode: mapClaudePermissionMode(
+        input.collaborationMode,
+        input.runtimeMode ?? input.session.runtimeMode ?? DEFAULT_RUNTIME_MODE
+      ),
       persistSession: true,
       includePartialMessages: true,
       settingSources: ["user", "project", "local"],

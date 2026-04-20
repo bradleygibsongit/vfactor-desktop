@@ -1,6 +1,7 @@
 import { desktop } from "@/desktop/client"
 import type {
   HarnessAdapter,
+  HarnessCreateSessionOptions,
   HarnessCommandInput,
   HarnessDefinition,
   HarnessPromptInput,
@@ -14,10 +15,14 @@ export class DesktopRuntimeHarnessAdapter implements HarnessAdapter {
 
   async initialize(): Promise<void> {}
 
-  async createSession(projectPath: string): Promise<RuntimeSession> {
+  async createSession(
+    projectPath: string,
+    options?: HarnessCreateSessionOptions
+  ): Promise<RuntimeSession> {
     const result = await desktop.runtime.createSession({
       harnessId: this.definition.id,
       projectPath,
+      runtimeMode: options?.runtimeMode,
     })
 
     return result.session
@@ -60,6 +65,7 @@ export class DesktopRuntimeHarnessAdapter implements HarnessAdapter {
         text: input.text,
         agent: input.agent,
         collaborationMode: input.collaborationMode,
+        runtimeMode: input.runtimeMode,
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         fastMode: input.fastMode,

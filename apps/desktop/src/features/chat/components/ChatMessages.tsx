@@ -430,7 +430,7 @@ export function ChatMessages({
         status={status}
         onThreadPrepared={setPreparedThreadKey}
       />
-      <ConversationContent className="mx-auto flex w-full max-w-[682px] flex-col gap-0 px-6 pb-10">
+      <ConversationContent className="mx-auto flex w-full max-w-[784px] flex-col gap-0 px-6 pb-10">
         <>
           <HybridTimelineBlocks
             preparedDisplayBlocks={stablePreparedDisplayBlocks}

@@ -1,5 +1,11 @@
 import { nanoid } from "nanoid"
-import type { HarnessId, RuntimeAttachmentPart, RuntimeSession } from "../types"
+import {
+  DEFAULT_RUNTIME_MODE,
+  type HarnessId,
+  type RuntimeAttachmentPart,
+  type RuntimeModeKind,
+  type RuntimeSession,
+} from "../types"
 
 export function deriveSessionTitle(
   text: string,
@@ -40,13 +46,15 @@ export function replaceSession(
 
 export function createOptimisticRuntimeSession(
   harnessId: HarnessId,
-  projectPath: string
+  projectPath: string,
+  runtimeMode: RuntimeModeKind = DEFAULT_RUNTIME_MODE
 ): RuntimeSession {
   const now = Date.now()
 
   return {
     id: `draft-${nanoid()}`,
     harnessId,
+    runtimeMode,
     projectPath,
     createdAt: now,
     updatedAt: now,

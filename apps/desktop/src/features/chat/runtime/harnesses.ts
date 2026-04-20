@@ -2,6 +2,7 @@ import { nanoid } from "nanoid"
 import { createTextMessage } from "../domain/runtimeMessages"
 import type {
   HarnessAdapter,
+  HarnessCreateSessionOptions,
   HarnessCommandInput,
   HarnessDefinition,
   HarnessId,
@@ -17,10 +18,14 @@ class PlaceholderHarnessAdapter implements HarnessAdapter {
 
   async initialize(): Promise<void> {}
 
-  async createSession(projectPath: string): Promise<RuntimeSession> {
+  async createSession(
+    projectPath: string,
+    options?: HarnessCreateSessionOptions
+  ): Promise<RuntimeSession> {
     return {
       id: nanoid(),
       harnessId: this.definition.id,
+      runtimeMode: options?.runtimeMode,
       projectPath,
       createdAt: Date.now(),
       updatedAt: Date.now(),

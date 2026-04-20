@@ -1,4 +1,20 @@
-import { ArrowUp02, Brain, CaretDown, CheckCircle, Circle, DocumentValidation, Paperclip, Plus, Stop, X, Zap } from "@/components/icons"
+import {
+  ArrowUp02,
+  ArrowElbowDownLeft,
+  Brain,
+  CaretDown,
+  CheckCircle,
+  Circle,
+  DocumentValidation,
+  FileLock,
+  Paperclip,
+  PencilSimple,
+  Plus,
+  ShieldWarning,
+  Stop,
+  Trash,
+  Zap,
+} from "@/components/icons"
 import { desktop } from "@/desktop/client"
 import { feedbackSurfaceClassName } from "@/features/shared/appearance"
 import { THEME_OPTIONS } from "@/features/shared/appearance"
@@ -20,7 +36,14 @@ import { useCommands, type NormalizedCommand } from "../hooks/useCommands"
 import { useAgents, type NormalizedAgent } from "../hooks/useAgents"
 import { useFileSearch } from "../hooks/useFileSearch"
 import { useModels } from "../hooks/useModels"
-import type { HarnessId, RuntimePromptResponse, RuntimeReasoningEffort } from "../types"
+import {
+  DEFAULT_RUNTIME_MODE,
+  type HarnessId,
+  type QueuedChatMessage,
+  type RuntimeModeKind,
+  type RuntimePromptResponse,
+  type RuntimeReasoningEffort,
+} from "../types"
 import type { ComposerPlan, ComposerPrompt } from "./composer/types"
 import { getRuntimeModelLabel } from "../domain/runtimeModels"
 import {
@@ -90,6 +113,7 @@ import { ModelLogo, getModelLogoKind, type ModelLogoKind } from "./ModelLogo"
 import {
   collectAttachmentIdsFromComposerValue,
   createDraftAttachment,
+  getDraftAttachmentLabel,
   getComposerTextInput,
   isLargeTextPaste,
   type DraftChatAttachment,
@@ -103,6 +127,7 @@ interface ChatInputProps {
   setInput: (value: string) => void
   attachments?: DraftChatAttachment[]
   setAttachments?: (attachments: DraftChatAttachment[]) => void
+  queuedMessages?: QueuedChatMessage[]
   isLocked?: boolean
   placement?: "docked" | "intro"
   allowSlashCommands?: boolean
@@ -112,6 +137,7 @@ interface ChatInputProps {
       attachments?: DraftChatAttachment[]
       agent?: string
       collaborationMode?: "default" | "plan"
+      runtimeMode?: RuntimeModeKind
       model?: string
       reasoningEffort?: string | null
       fastMode?: boolean
@@ -124,6 +150,8 @@ interface ChatInputProps {
   prompt?: ComposerPrompt | null
   onAnswerPrompt?: (response: RuntimePromptResponse) => void
   onDismissPrompt?: () => void
+  onRemoveQueuedMessage?: (queuedMessageId: string) => void
+  onEditQueuedMessage?: (queuedMessageId: string) => void
 }
 
 const MODEL_HARNESS_IDS: HarnessId[] = ["codex", "claude-code"]
@@ -176,12 +204,75 @@ function formatReasoningEffortLabel(value: string): string {
     .join(" ")
 }
 
+const runtimeModeOptions: Array<{
+  id: RuntimeModeKind
+  label: string
+  description: string
+  Icon: typeof FileLock
+}> = [
+  {
+    id: "approval-required",
+    label: "Supervised",
+    description: "Ask before commands and file changes.",
+    Icon: FileLock,
+  },
+  {
+    id: "auto-accept-edits",
+    label: "Auto-accept edits",
+    description: "Auto-approve edits, ask before other actions.",
+    Icon: PencilSimple,
+  },
+  {
+    id: "full-access",
+    label: "Full access",
+    description: "Allow commands and edits without prompts.",
+    Icon: ShieldWarning,
+  },
+]
+
+function getRuntimeModeOption(runtimeMode: RuntimeModeKind) {
+  return (
+    runtimeModeOptions.find((option) => option.id === runtimeMode) ??
+    runtimeModeOptions[runtimeModeOptions.length - 1]
+  )
+}
+
+function getQueuedMessagePreview(message: QueuedChatMessage): string {
+  const normalizedText = message.text.trim().replace(/\s+/g, " ")
+  if (normalizedText) {
+    return normalizedText
+  }
+
+  if (message.attachments.length === 1) {
+    return getDraftAttachmentLabel(message.attachments[0]!)
+  }
+
+  if (message.attachments.length > 1) {
+    return message.attachments.map((attachment) => getDraftAttachmentLabel(attachment)).join(", ")
+  }
+
+  return "Queued message"
+}
+
+function getQueuedAttachmentSummary(message: QueuedChatMessage): string | null {
+  if (message.attachments.length === 0) {
+    return null
+  }
+
+  if (message.attachments.length === 1) {
+    return getDraftAttachmentLabel(message.attachments[0]!)
+  }
+
+  return `${message.attachments.length} attachments`
+}
+
 export function ChatInput({
   sessionId = null,
   input,
   setInput,
   attachments: rawAttachments,
   setAttachments = noopSetChatInputAttachments,
+  queuedMessages = [],
   isLocked = false,
   placement = "docked",
   allowSlashCommands = true,
@@ -193,6 +284,8 @@ export function ChatInput({
   prompt,
   onAnswerPrompt,
   onDismissPrompt,
+  onRemoveQueuedMessage,
+  onEditQueuedMessage,
 }: ChatInputProps) {
   const attachments = normalizeChatInputAttachments(rawAttachments)
   const { selectedProject, selectedWorktreeId, selectedWorktreePath } = useCurrentProjectWorktree()
@@ -209,6 +302,7 @@ export function ChatInput({
   const createOptimisticSession = useChatStore((state) => state.createOptimisticSession)
   const setSessionHarness = useChatStore((state) => state.setSessionHarness)
   const setSessionModel = useChatStore((state) => state.setSessionModel)
+  const setSessionRuntimeMode = useChatStore((state) => state.setSessionRuntimeMode)
   const selectHarness = useChatStore((state) => state.selectHarness)
   const openChatSession = useTabStore((state) => state.openChatSession)
   const openTerminalTab = useTabStore((state) => state.openTerminalTab)
@@ -229,6 +323,7 @@ export function ChatInput({
     [projectChat, sessionId]
   )
   const activeSessionModelId = activeSession?.model?.trim() || null
+  const activeSessionRuntimeMode = activeSession?.runtimeMode ?? null
   const selectedHarnessId = activeSession?.harnessId ?? projectChat?.selectedHarnessId ?? null
   const isDraftSession = !!activeSession && !activeSession.remoteId
   const canSwitchHarnessForModelSelection = !activeSession?.id || isDraftSession
@@ -241,6 +336,7 @@ export function ChatInput({
   const [isComposerFocused, setIsComposerFocused] = useState(false)
   const [reasoningEffortOverride, setReasoningEffortOverride] = useState<RuntimeReasoningEffort | null>(null)
   const [fastModeOverride, setFastModeOverride] = useState<boolean | null>(null)
+  const [runtimeModeOverride, setRuntimeModeOverride] = useState<RuntimeModeKind | null>(null)
   const [promptAnswers, setPromptAnswers] = useState<Record<string, string | string[]>>({})
   const [promptCustomAnswers, setPromptCustomAnswers] = useState<Record<string, string>>({})
   const [currentPromptQuestionIndex, setCurrentPromptQuestionIndex] = useState(0)
@@ -443,6 +539,11 @@ export function ChatInput({
       }),
     [fastModeOverride, harnessDefaultFastMode, supportsFastMode]
   )
+  const runtimeMode = activeSessionRuntimeMode ?? runtimeModeOverride ?? DEFAULT_RUNTIME_MODE
+  const selectedRuntimeModeOption = useMemo(
+    () => getRuntimeModeOption(runtimeMode),
+    [runtimeMode]
+  )
   const toggleFastMode = useCallback(() => {
     setFastModeOverride((current) => (current == null ? !fastMode : !current))
   }, [fastMode])
@@ -480,7 +581,6 @@ export function ChatInput({
     [insertableCommands]
   )
 
-  const isStreaming = status === "streaming"
   const isWorking = status === "connecting" || status === "streaming"
   const isPromptActive = !!prompt
   const isComposerLocked = isLocked && !isPromptActive
@@ -504,7 +604,6 @@ export function ChatInput({
     allowSlashCommands &&
     !isPromptActive &&
     !isComposerLocked &&
-    !isWorking &&
     (slashCommandQuery !== null || slashMenuPage === "themes") &&
     !isSlashMenuDismissed
 
@@ -512,16 +611,16 @@ export function ChatInput({
     !isPromptActive &&
     !isComposerLocked &&
     composerTextInput.startsWith("@") &&
-    !isWorking &&
     dismissedMenuKey !== atMenuKey
   const atQuery = showAtMenu ? composerTextInput.slice(1) : ""
   const canSubmit = activeQuestionPrompt
     ? !!currentPromptQuestion && currentPromptQuestionAnswered
     : activeApprovalPrompt
       ? false
-    : (composerTextInput.trim().length > 0 || attachments.length > 0) &&
-        !isWorking &&
+      : (composerTextInput.trim().length > 0 || attachments.length > 0) &&
         !isComposerLocked
+  const shouldShowSendAction = !isWorking || canSubmit || showSlashMenu || showAtMenu
+  const showQueuedDeck = !isPromptActive && !isComposerLocked && queuedMessages.length > 0
 
   useEffect(() => {
     void initializeSettings()
@@ -552,6 +651,10 @@ export function ChatInput({
     setReasoningEffortOverride(null)
     setFastModeOverride(null)
   }, [activeSession?.id, effectiveModel?.id, selectedHarnessId, selectedWorktreeId])
+
+  useEffect(() => {
+    setRuntimeModeOverride(null)
+  }, [activeSession?.id, selectedWorktreeId])
 
   useEffect(() => {
     if (!isPlanModeAvailable) {
@@ -1478,6 +1581,7 @@ export function ChatInput({
           attachments: attachmentsForSubmit,
           agent: agentName,
           collaborationMode,
+          runtimeMode,
           model: effectiveModel?.id ?? undefined,
           reasoningEffort: collaborationMode ? reasoningEffort : null,
           fastMode: collaborationMode ? fastMode : false,
@@ -1486,6 +1590,7 @@ export function ChatInput({
         onSubmit(trimmedInput, {
           attachments: attachmentsForSubmit,
           collaborationMode,
+          runtimeMode,
           model: effectiveModel?.id ?? undefined,
           reasoningEffort: collaborationMode ? reasoningEffort : null,
           fastMode: collaborationMode ? fastMode : false,
@@ -1505,6 +1610,7 @@ export function ChatInput({
       promptCustomAnswers,
       isPlanModeAvailable,
       isPlanModeEnabled,
+      runtimeMode,
       effectiveModel?.id,
       reasoningEffort,
       fastMode,
@@ -1853,6 +1959,18 @@ export function ChatInput({
     ]
   )
 
+  const handleSelectRuntimeMode = useCallback(
+    async (nextRuntimeMode: RuntimeModeKind) => {
+      if (activeSession?.id) {
+        await setSessionRuntimeMode(activeSession.id, nextRuntimeMode)
+        return
+      }
+
+      setRuntimeModeOverride(nextRuntimeMode)
+    },
+    [activeSession?.id, setSessionRuntimeMode]
+  )
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -1868,253 +1986,325 @@ export function ChatInput({
         className="sr-only"
         onChange={handleUploadInputChange}
       />
-      <div
-        ref={composerMenuAnchorRef}
-        className={cn(
-          "chat-composer-shell relative overflow-hidden border shadow-sm",
-          placement === "intro" ? "rounded-xl" : "rounded-2xl",
-          isApprovalComposerState
-            ? "border-[var(--color-chat-approval-border)] bg-[var(--color-chat-approval-surface)]"
-            : isPlanModeEnabled
-              ? "border-[var(--color-chat-plan-border)] bg-[var(--color-chat-plan-surface)] shadow-[0_0_0_1px_var(--color-chat-plan-border)]"
-            : "border-transparent"
-        )}
-      >
-        {activePlan && (
+      <div className="flex flex-col">
+        {showQueuedDeck ? (
           <div
             className={cn(
-              "relative border-b",
-              isApprovalComposerState
-                ? "border-[var(--color-chat-approval-border)]"
-                : isPlanModeEnabled
-                  ? "border-[var(--color-chat-plan-border)]"
-                : "border-border"
+              "pointer-events-none relative z-0 px-2",
+              placement === "intro" ? "pb-1.5" : "pb-1.5"
             )}
           >
-            {activePlan && (
-              <div className="px-4 py-3">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
-                    <Brain className="size-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{activePlan.title}</p>
-                        {activePlan.summary && (
-                          <p className="mt-0.5 text-sm text-muted-foreground">{activePlan.summary}</p>
-                        )}
-                      </div>
-                      <span className="rounded-full border border-border bg-muted px-2 py-1 text-sm text-muted-foreground">
-                        {activePlan.steps.length} steps
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-col gap-2">
-                      {activePlan.steps.map((step, index) => {
-                        const StepIcon =
-                          step.status === "completed" ? CheckCircle : Circle
+            <div
+              className={cn(
+                "chat-composer-queue-deck pointer-events-auto overflow-hidden border px-2.5 pt-1",
+                placement === "intro"
+                  ? "mx-1 rounded-t-[22px] rounded-b-none pb-1"
+                  : "mx-5 rounded-t-[24px] rounded-b-none pb-1"
+              )}
+            >
+              {queuedMessages.map((queuedMessage) => {
+                const attachmentSummary = getQueuedAttachmentSummary(queuedMessage)
 
-                        return (
-                          <div key={step.id} className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <StepIcon
-                              className={
-                                step.status === "completed"
-                                  ? "size-3.5 text-foreground"
-                                  : "size-3.5 text-muted-foreground/60"
-                              }
-                            />
-                            <span className="text-sm text-muted-foreground/70">{index + 1}.</span>
-                            <span className={step.status === "completed" ? "text-foreground" : ""}>
-                              {step.label}
+                return (
+                  <div
+                    key={queuedMessage.id}
+                    className="chat-composer-queue-row group flex min-h-9 items-center gap-2.5 px-1"
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-2 py-1.5">
+                      <div className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/54">
+                        <ArrowElbowDownLeft className="size-3" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-[13px] font-medium text-foreground/78">
+                            {getQueuedMessagePreview(queuedMessage)}
+                          </p>
+                          {attachmentSummary ? (
+                            <span className="shrink-0 truncate text-[10px] text-muted-foreground/50">
+                              {attachmentSummary}
                             </span>
-                          </div>
-                        )
-                      })}
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5 py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onEditQueuedMessage?.(queuedMessage.id)}
+                        disabled={!onEditQueuedMessage}
+                        className="chat-composer-queue-action inline-flex h-6 items-center gap-1 rounded-full px-1.5 text-[11px] text-muted-foreground/74 hover:bg-white/5 hover:text-foreground disabled:opacity-40"
+                        aria-label="Edit queued message"
+                        title="Edit queued message"
+                      >
+                        <PencilSimple className="size-2.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveQueuedMessage?.(queuedMessage.id)}
+                        disabled={!onRemoveQueuedMessage}
+                        className="chat-composer-queue-action inline-flex size-6 items-center justify-center rounded-full text-muted-foreground/68 hover:bg-white/5 hover:text-foreground disabled:opacity-40"
+                        aria-label="Remove queued message"
+                        title="Remove queued message"
+                      >
+                        <Trash className="size-2.5" />
+                      </button>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                )
+              })}
+            </div>
           </div>
-        )}
+        ) : null}
 
         <div
-          className={cn(
-            "relative px-4 pt-3 pb-3"
-          )}
+          className={cn("relative z-10", showQueuedDeck ? "-mt-1" : "")}
         >
-          {isComposerLocked ? (
-            <div className="flex items-center gap-3 py-2 px-1">
-              <Loader size={14} className="text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Setting up workspace…</span>
-            </div>
-          ) : isPromptActive && prompt ? (
-            activeApprovalPrompt ? (
-              <ApprovalPromptSurface
-                prompt={activeApprovalPrompt}
-                onApprove={handleApprovePrompt}
-                onDeny={handleDenyPrompt}
-              />
-            ) : activeQuestionPrompt ? (
-              <StructuredPromptSurface
-                prompt={activeQuestionPrompt}
-                answers={promptAnswers}
-                customAnswers={promptCustomAnswers}
-                onAnswerChange={handlePromptAnswerChange}
-                onCustomAnswerChange={handlePromptCustomAnswerChange}
-                onCustomAnswerFocus={handlePromptCustomAnswerFocus}
-                currentQuestionIndex={currentPromptQuestionIndex}
-                progressLabel={promptProgressLabel ?? ""}
-                onPreviousQuestion={handleGoToPreviousPromptQuestion}
-                onNextQuestion={handleGoToNextPromptQuestion}
-                canGoPrevious={!isFirstPromptQuestion}
-                canGoNext={!isLastPromptQuestion}
-                canSubmitCurrentQuestion={canSubmit}
-                submitLabel={promptCtaLabel}
-                onDismissPrompt={handleDismissPrompt}
-              />
-            ) : null
-          ) : (
-            <div>
-              <ComposerEditorSurface
-                editorRef={editorRef}
-                initialConfig={composerInitialConfig}
-                isLocked={isComposerLocked}
-                isStreaming={isWorking}
-                onChange={handleComposerChange}
-                onKeyDown={handleKeyDown}
-                onPaste={handleComposerPaste}
-                onDragOver={handleComposerDragOver}
-                onDrop={handleComposerDrop}
-                onCompositionStart={() => setIsImeComposing(true)}
-                onCompositionEnd={() => setIsImeComposing(false)}
-                onFocus={() => setIsComposerFocused(true)}
-                onBlur={() => setIsComposerFocused(false)}
-                placeholder={placeholder}
-              />
+          <div
+            ref={composerMenuAnchorRef}
+            className={cn(
+              "chat-composer-shell relative overflow-hidden border shadow-sm",
+              placement === "intro" ? "rounded-xl" : "rounded-2xl",
+              isApprovalComposerState
+                ? "border-[var(--color-chat-approval-border)] bg-[var(--color-chat-approval-surface)]"
+                : isPlanModeEnabled
+                  ? "border-[var(--color-chat-plan-border)] bg-[var(--color-chat-plan-surface)] shadow-[0_0_0_1px_var(--color-chat-plan-border)]"
+                  : "border-transparent"
+            )}
+          >
+          {activePlan && (
+            <div
+              className={cn(
+                "relative border-b",
+                isApprovalComposerState
+                  ? "border-[var(--color-chat-approval-border)]"
+                  : isPlanModeEnabled
+                    ? "border-[var(--color-chat-plan-border)]"
+                  : "border-border"
+              )}
+            >
+              {activePlan && (
+                <div className="px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+                      <Brain className="size-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{activePlan.title}</p>
+                          {activePlan.summary && (
+                            <p className="mt-0.5 text-sm text-muted-foreground">{activePlan.summary}</p>
+                          )}
+                        </div>
+                        <span className="rounded-full border border-border bg-muted px-2 py-1 text-sm text-muted-foreground">
+                          {activePlan.steps.length} steps
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2">
+                        {activePlan.steps.map((step, index) => {
+                          const StepIcon =
+                            step.status === "completed" ? CheckCircle : Circle
 
-              {!isComposerFocused ? (
-                <div className="pointer-events-none absolute top-3 right-4 z-10 text-sm leading-5 text-muted-foreground/58">
-                  <span className="text-foreground/84">{focusChatInputHint}</span>
-                  <span className="text-muted-foreground/58"> to focus</span>
+                          return (
+                            <div key={step.id} className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <StepIcon
+                                className={
+                                  step.status === "completed"
+                                    ? "size-3.5 text-foreground"
+                                    : "size-3.5 text-muted-foreground/60"
+                                }
+                              />
+                              <span className="text-sm text-muted-foreground/70">{index + 1}.</span>
+                              <span className={step.status === "completed" ? "text-foreground" : ""}>
+                                {step.label}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              ) : null}
-
-              {showSlashMenu ? (
-                <ComposerFloatingOverlay anchorRef={composerMenuAnchorRef}>
-                  {slashMenuPage === "themes" ? (
-                    <SlashCommandMenu
-                      page="themes"
-                      themes={THEME_OPTIONS}
-                      activeThemeId={appearanceThemeId}
-                      onSelectTheme={handleSelectThemeOption}
-                      onClose={closeSlashMenu}
-                      selectedIndex={selectedIndex}
-                    />
-                  ) : (
-                    <SlashCommandMenu
-                      page="commands"
-                      commands={filteredCommands}
-                      query={slashCommandQuery ?? ""}
-                      isLoading={isLoadingCommands}
-                      onSelect={handleSelectCommand}
-                      onClose={closeSlashMenu}
-                      selectedIndex={selectedIndex}
-                    />
-                  )}
-                </ComposerFloatingOverlay>
-              ) : null}
-
-              {showAtMenu ? (
-                <ComposerFloatingOverlay anchorRef={composerMenuAnchorRef}>
-                  <AtMentionMenu
-                    agents={filteredAgents}
-                    files={filteredFiles}
-                    query={atQuery}
-                    isLoading={isLoadingAgents || isLoadingFiles}
-                    onSelectAgent={handleSelectAgent}
-                    onSelectFile={handleSelectFile}
-                    onClose={closeAtMenu}
-                    selectedIndex={selectedIndex}
-                  />
-                </ComposerFloatingOverlay>
-              ) : null}
+              )}
             </div>
           )}
 
-          {!isPromptActive && !isComposerLocked && uploadError ? (
-            <div className={cn(feedbackSurfaceClassName("destructive"), "mt-3 rounded-lg px-3 py-2 text-sm")}>
-              {uploadError}
-            </div>
-          ) : null}
+          <div
+            className={cn(
+              "relative px-4 pt-3 pb-3"
+            )}
+          >
+            {isComposerLocked ? (
+              <div className="flex items-center gap-3 py-2 px-1">
+                <Loader size={14} className="text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Setting up workspace…</span>
+              </div>
+            ) : isPromptActive && prompt ? (
+              activeApprovalPrompt ? (
+                <ApprovalPromptSurface
+                  prompt={activeApprovalPrompt}
+                  onApprove={handleApprovePrompt}
+                  onDeny={handleDenyPrompt}
+                />
+              ) : activeQuestionPrompt ? (
+                <StructuredPromptSurface
+                  prompt={activeQuestionPrompt}
+                  answers={promptAnswers}
+                  customAnswers={promptCustomAnswers}
+                  onAnswerChange={handlePromptAnswerChange}
+                  onCustomAnswerChange={handlePromptCustomAnswerChange}
+                  onCustomAnswerFocus={handlePromptCustomAnswerFocus}
+                  currentQuestionIndex={currentPromptQuestionIndex}
+                  progressLabel={promptProgressLabel ?? ""}
+                  onPreviousQuestion={handleGoToPreviousPromptQuestion}
+                  onNextQuestion={handleGoToNextPromptQuestion}
+                  canGoPrevious={!isFirstPromptQuestion}
+                  canGoNext={!isLastPromptQuestion}
+                  canSubmitCurrentQuestion={canSubmit}
+                  submitLabel={promptCtaLabel}
+                  onDismissPrompt={handleDismissPrompt}
+                />
+              ) : null
+            ) : (
+              <div>
+                <ComposerEditorSurface
+                  editorRef={editorRef}
+                  initialConfig={composerInitialConfig}
+                  isLocked={isComposerLocked}
+                  onChange={handleComposerChange}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handleComposerPaste}
+                  onDragOver={handleComposerDragOver}
+                  onDrop={handleComposerDrop}
+                  onCompositionStart={() => setIsImeComposing(true)}
+                  onCompositionEnd={() => setIsImeComposing(false)}
+                  onFocus={() => setIsComposerFocused(true)}
+                  onBlur={() => setIsComposerFocused(false)}
+                  placeholder={placeholder}
+                />
 
-          {!isPromptActive && !isComposerLocked && (
-            <div className="mt-2 flex items-center gap-2">
-              {selectorsRow && (
-                <DropdownMenu>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger
-                        aria-label="Open composer actions"
-                        className={cn(
-                          "inline-flex h-8 w-7 items-center justify-center text-muted-foreground transition-colors cursor-pointer",
-                          "hover:text-foreground",
-                          (fastMode || isPlanModeEnabled) && "text-foreground"
-                        )}
-                      >
-                        <Plus className="size-4" />
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Composer actions</TooltipContent>
-                  </Tooltip>
-                  <DropdownMenuContent align="start" side="top" sideOffset={8} className="w-56">
-                    <DropdownMenuGroup>
-                      <DropdownMenuLabel>Composer</DropdownMenuLabel>
-                      <DropdownMenuItem
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isWorking}
-                        className="flex items-center gap-2"
-                      >
-                        <Paperclip className="size-4" />
-                        <span className="flex-1">Attach files</span>
-                      </DropdownMenuItem>
-                      {supportsFastMode || isPlanModeAvailable ? <DropdownMenuSeparator /> : null}
+                {!isComposerFocused ? (
+                  <div className="pointer-events-none absolute top-3 right-4 z-10 text-sm leading-5 text-muted-foreground/58">
+                    <span className="text-foreground/84">{focusChatInputHint}</span>
+                    <span className="text-muted-foreground/58"> to focus</span>
+                  </div>
+                ) : null}
+
+                {showSlashMenu ? (
+                  <ComposerFloatingOverlay anchorRef={composerMenuAnchorRef}>
+                    {slashMenuPage === "themes" ? (
+                      <SlashCommandMenu
+                        page="themes"
+                        themes={THEME_OPTIONS}
+                        activeThemeId={appearanceThemeId}
+                        onSelectTheme={handleSelectThemeOption}
+                        onClose={closeSlashMenu}
+                        selectedIndex={selectedIndex}
+                      />
+                    ) : (
+                      <SlashCommandMenu
+                        page="commands"
+                        commands={filteredCommands}
+                        query={slashCommandQuery ?? ""}
+                        isLoading={isLoadingCommands}
+                        onSelect={handleSelectCommand}
+                        onClose={closeSlashMenu}
+                        selectedIndex={selectedIndex}
+                      />
+                    )}
+                  </ComposerFloatingOverlay>
+                ) : null}
+
+                {showAtMenu ? (
+                  <ComposerFloatingOverlay anchorRef={composerMenuAnchorRef}>
+                    <AtMentionMenu
+                      agents={filteredAgents}
+                      files={filteredFiles}
+                      query={atQuery}
+                      isLoading={isLoadingAgents || isLoadingFiles}
+                      onSelectAgent={handleSelectAgent}
+                      onSelectFile={handleSelectFile}
+                      onClose={closeAtMenu}
+                      selectedIndex={selectedIndex}
+                    />
+                  </ComposerFloatingOverlay>
+                ) : null}
+              </div>
+            )}
+
+            {!isPromptActive && !isComposerLocked && uploadError ? (
+              <div className={cn(feedbackSurfaceClassName("destructive"), "mt-3 rounded-lg px-3 py-2 text-sm")}>
+                {uploadError}
+              </div>
+            ) : null}
+
+            {!isPromptActive && !isComposerLocked && (
+              <div className="mt-2 flex items-center gap-2">
+                {selectorsRow && (
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger
+                          aria-label="Open composer actions"
+                          className={cn(
+                            "inline-flex h-8 w-7 items-center justify-center text-muted-foreground transition-colors cursor-pointer",
+                            "hover:text-foreground",
+                            (fastMode || isPlanModeEnabled) && "text-foreground"
+                          )}
+                        >
+                          <Plus className="size-4" />
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Composer actions</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent align="start" side="top" sideOffset={8} className="w-56">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>Composer</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-2"
+                        >
+                          <Paperclip className="size-4" />
+                          <span className="flex-1">Attach files</span>
+                        </DropdownMenuItem>
+                        {supportsFastMode || isPlanModeAvailable ? <DropdownMenuSeparator /> : null}
+                        {supportsFastMode ? (
+                          <DropdownMenuItem
+                            onClick={toggleFastMode}
+                            className="flex items-center gap-2"
+                          >
+                            <Zap weight="fill" className="size-3.5 text-[color:var(--color-warning)]" />
+                            <span className="flex-1">Fast mode</span>
+                            {fastMode ? <CheckCircle className="size-3.5 text-muted-foreground" /> : null}
+                          </DropdownMenuItem>
+                        ) : null}
+                        {supportsFastMode && isPlanModeAvailable ? <DropdownMenuSeparator /> : null}
+                        {isPlanModeAvailable ? (
+                          <DropdownMenuItem
+                            onClick={togglePlanMode}
+                            className="flex items-center gap-2"
+                          >
+                            <DocumentValidation className="size-4 text-[var(--color-chat-plan-accent)]" />
+                            <span className="flex-1">Plan mode</span>
+                            <DropdownMenuShortcut>{planModeShortcutLabel}</DropdownMenuShortcut>
+                            {isPlanModeEnabled ? <CheckCircle className="size-3.5 text-muted-foreground" /> : null}
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuGroup>
                       {supportsFastMode ? (
-                        <DropdownMenuItem
-                          onClick={toggleFastMode}
-                          className="flex items-center gap-2"
-                        >
-                          <Zap weight="fill" className="size-3.5 text-[color:var(--color-warning)]" />
-                          <span className="flex-1">Fast mode</span>
-                          {fastMode ? <CheckCircle className="size-3.5 text-muted-foreground" /> : null}
-                        </DropdownMenuItem>
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem disabled className="whitespace-normal text-xs leading-5 text-muted-foreground">
+                            <span>{fastModeTooltipLabel}</span>
+                          </DropdownMenuItem>
+                        </>
                       ) : null}
-                      {supportsFastMode && isPlanModeAvailable ? <DropdownMenuSeparator /> : null}
-                      {isPlanModeAvailable ? (
-                        <DropdownMenuItem
-                          onClick={togglePlanMode}
-                          className="flex items-center gap-2"
-                        >
-                          <DocumentValidation className="size-4 text-[var(--color-chat-plan-accent)]" />
-                          <span className="flex-1">Plan mode</span>
-                          <DropdownMenuShortcut>{planModeShortcutLabel}</DropdownMenuShortcut>
-                          {isPlanModeEnabled ? <CheckCircle className="size-3.5 text-muted-foreground" /> : null}
-                        </DropdownMenuItem>
-                      ) : null}
-                    </DropdownMenuGroup>
-                    {supportsFastMode ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem disabled className="whitespace-normal text-xs leading-5 text-muted-foreground">
-                          <span>{fastModeTooltipLabel}</span>
-                        </DropdownMenuItem>
-                      </>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
 
-              {selectorsRow && <DropdownMenu>
+                {selectorsRow && <DropdownMenu>
               <DropdownMenuTrigger
                 className="inline-flex h-8 items-center gap-2 px-1 text-sm text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
                 aria-label={selectedModelLabel}
@@ -2251,27 +2441,72 @@ export function ChatInput({
               </DropdownMenu>}
 
               <div className="ml-auto flex items-center gap-2">
-                {isStreaming ? (
-                <button
-                  type="button"
-                  onClick={onAbort}
-                  className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-85"
-                >
-                  <Stop weight="fill" className="size-4" />
-                </button>
+                {shouldShowSendAction ? (
+                  <button
+                    type="submit"
+                    disabled={!canSubmit && !showSlashMenu && !showAtMenu}
+                    className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+                  >
+                    <ArrowUp02 weight="bold" className="size-4" />
+                  </button>
                 ) : (
-                <button
-                  type="submit"
-                  disabled={!canSubmit && !showSlashMenu && !showAtMenu}
-                  className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
-                >
-                  <ArrowUp02 weight="bold" className="size-4" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={onAbort}
+                    disabled={!onAbort}
+                    className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+                  >
+                    <Stop weight="fill" className="size-4" />
+                  </button>
                 )}
               </div>
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
+        </div>
+
+        {!isPromptActive && !isComposerLocked && selectorsRow ? (
+          <div className="flex min-h-9 items-center gap-2 px-1 pt-2 text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground transition-colors hover:bg-[var(--sidebar-item-hover)] hover:text-foreground cursor-pointer"
+                  aria-label={selectedRuntimeModeOption.label}
+                >
+                  <selectedRuntimeModeOption.Icon className="size-3.5 shrink-0" />
+                  <span>{selectedRuntimeModeOption.label}</span>
+                  <CaretDown className="size-2.5 text-muted-foreground" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  {runtimeModeOptions.map((option) => (
+                    <Tooltip key={option.id}>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            void handleSelectRuntimeMode(option.id)
+                          }}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <option.Icon className="size-4 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{option.label}</span>
+                          </span>
+                          {option.id === runtimeMode ? (
+                            <CheckCircle className="size-3.5 shrink-0 text-muted-foreground" />
+                          ) : null}
+                        </DropdownMenuItem>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" align="center" className="max-w-64 text-xs leading-5">
+                        {option.description}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        ) : null}
       </div>
     </form>
   )

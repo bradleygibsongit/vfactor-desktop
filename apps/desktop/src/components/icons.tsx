@@ -84,6 +84,7 @@ import {
   PlusSquare as PhosphorPlusSquare,
   PushPinSimple as PhosphorPushPinSimple,
   Robot as PhosphorRobot,
+  ShieldWarning as PhosphorShieldWarning,
   SidebarSimple as PhosphorSidebarSimple,
   Square as PhosphorSquare,
   Terminal as PhosphorTerminal,
@@ -238,6 +239,7 @@ export const PlusSquare = createIcon("PlusSquare", PhosphorPlusSquare)
 export const PushPin = createIcon("PushPin", PhosphorPushPinSimple)
 export const Refresh = createIcon("Refresh", PhosphorArrowClockwise)
 export const Robot = createIcon("Robot", PhosphorRobot)
+export const ShieldWarning = createIcon("ShieldWarning", PhosphorShieldWarning)
 export const Sidebar = createIcon("Sidebar", PhosphorSidebarSimple)
 export const Square = createIcon("Square", PhosphorSquare)
 export const SquareMinus = createIcon("SquareMinus", PhosphorMinusSquare)

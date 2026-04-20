@@ -57,11 +57,14 @@ function ChatComposerPane({
     setInput,
     attachments,
     setAttachments,
+    queuedMessages,
     status,
     activePrompt,
     answerPrompt,
     dismissPrompt,
     abort,
+    removeQueuedMessage,
+    editQueuedMessage,
     executeCommand,
     submit,
   } = useChatComposerState({
@@ -79,6 +82,7 @@ function ChatComposerPane({
       setInput={setInput}
       attachments={attachments}
       setAttachments={setAttachments}
+      queuedMessages={queuedMessages}
       onSubmit={async (text, options) => {
         await submit(text, options)
       }}
@@ -86,6 +90,8 @@ function ChatComposerPane({
       onAnswerPrompt={answerPrompt}
       onDismissPrompt={dismissPrompt}
       onAbort={abort}
+      onRemoveQueuedMessage={removeQueuedMessage}
+      onEditQueuedMessage={editQueuedMessage}
       onExecuteCommand={async (command, args) => {
         await executeCommand(command, args)
       }}
@@ -147,7 +153,7 @@ export function ChatContainerContent({ sessionId = null }: ChatContainerContentP
     return (
       <div className="h-full flex flex-col items-center justify-center">
         <div
-          className={`w-full max-w-[682px] flex flex-col gap-4 ${transition === "rise" ? "animate-composer-rise" : ""}`}
+          className={`w-full max-w-[784px] flex flex-col gap-4 ${transition === "rise" ? "animate-composer-rise" : ""}`}
           onAnimationEnd={() => setTransition(null)}
         >
           {projectName ? (
@@ -194,7 +200,7 @@ export function ChatContainerContent({ sessionId = null }: ChatContainerContentP
         className={`flex-shrink-0 flex justify-center ${transition === "settle" ? "animate-composer-settle" : ""}`}
         onAnimationEnd={() => setTransition(null)}
       >
-        <div className="w-full max-w-[682px]">
+        <div className="w-full max-w-[784px]">
           <MemoizedChatComposerPane
             activeSessionId={resolvedSessionId}
             selectedProjectId={selectedProjectId}

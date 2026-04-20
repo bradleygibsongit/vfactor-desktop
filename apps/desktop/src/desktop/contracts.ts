@@ -1,5 +1,6 @@
 import type {
   CollaborationModeKind,
+  RuntimeModeKind,
   HarnessId,
   HarnessTurnResult,
   RuntimeAgent,
@@ -388,6 +389,7 @@ export interface StoreValueMap {
 export interface RuntimeCreateSessionInput {
   harnessId: HarnessId
   projectPath: string
+  runtimeMode?: RuntimeModeKind
 }
 
 export interface RuntimeListModelsInput {
@@ -410,6 +412,7 @@ export interface RuntimeSendTurnInput {
   text: string
   agent?: string
   collaborationMode?: CollaborationModeKind
+  runtimeMode?: RuntimeModeKind
   model?: string
   reasoningEffort?: RuntimeReasoningEffort | null
   fastMode?: boolean

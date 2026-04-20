@@ -1,4 +1,5 @@
 import type {
+  HarnessCreateSessionOptions,
   HarnessCommandInput,
   HarnessId,
   HarnessPromptInput,
@@ -30,7 +31,10 @@ export interface RuntimeProviderContext {
 
 export interface RuntimeProviderAdapter {
   harnessId: HarnessId
-  createSession: (projectPath: string) => Promise<RuntimeSession>
+  createSession: (
+    projectPath: string,
+    options?: HarnessCreateSessionOptions
+  ) => Promise<RuntimeSession>
   listAgents: () => Promise<RuntimeAgent[]>
   listCommands: (projectPath?: string) => Promise<RuntimeCommand[]>
   listModels: () => Promise<RuntimeModel[]>

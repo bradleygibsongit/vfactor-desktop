@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, mock, test } from "bun:test"
 
 const storeData = new Map<string, unknown>()
 let pendingHarnessTurn: Promise<{ messages?: Array<{ info: { id: string; sessionId: string; role: "assistant"; createdAt: number }; parts: Array<{ id: string; type: "text"; text: string }> }> }> | null = null
-let lastHarnessTurnInput: { text: string } | null = null
+let lastHarnessTurnInput: { text: string; runtimeMode?: string | null } | null = null
+const harnessTurnInputs: Array<{ text: string; runtimeMode?: string | null }> = []
+let lastCreateSessionOptions: { runtimeMode?: string | null } | null = null
+let createSessionCallCount = 0
 const abortCalls: string[] = []
 let projectStoreState: {
   projects: Array<{
@@ -92,20 +95,29 @@ mock.module("../runtime/harnesses", () => ({
       },
     },
     initialize: async () => {},
-    createSession: async (projectPath: string) => ({
-      id: "remote-session",
-      remoteId: "remote-session",
-      harnessId: "codex",
-      projectPath,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }),
+    createSession: async (
+      projectPath: string,
+      options?: { runtimeMode?: string | null }
+    ) => {
+      createSessionCallCount += 1
+      lastCreateSessionOptions = options ?? null
+      return {
+        id: "remote-session",
+        remoteId: "remote-session",
+        harnessId: "codex",
+        runtimeMode: options?.runtimeMode ?? undefined,
+        projectPath,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+    },
     listAgents: async () => [],
     listCommands: async () => [],
     listModels: async () => [],
     searchFiles: async () => [],
     sendMessage: async (input: { text: string }) => {
       lastHarnessTurnInput = input
+      harnessTurnInputs.push(input)
       return pendingHarnessTurn ?? { messages: [] }
     },
     answerPrompt: async () => ({ messages: [] }),
@@ -123,6 +135,7 @@ function resetChatStore() {
     chatByWorktree: {},
     messagesBySession: {},
     activePromptBySession: {},
+    queuedMessagesBySession: {},
     sessionActivityById: {},
     currentSessionId: null,
     childSessions: new Map(),
@@ -139,6 +152,9 @@ describe("chatStore worktree scoping", () => {
     storeData.clear()
     pendingHarnessTurn = null
     lastHarnessTurnInput = null
+    harnessTurnInputs.length = 0
+    lastCreateSessionOptions = null
+    createSessionCallCount = 0
     abortCalls.length = 0
     projectStoreState = {
       projects: [],
@@ -205,6 +221,27 @@ describe("chatStore worktree scoping", () => {
       )?.model
     ).toBe("gpt-5.4")
     expect(persisted.chatByWorktree["worktree-1"]?.sessions[0]?.model).toBe("gpt-5.4")
+  })
+
+  test("persists the selected runtime mode on a chat session", async () => {
+    const session = useChatStore.getState().createOptimisticSession("worktree-1", "/tmp/worktree-1")
+
+    expect(session).not.toBeNull()
+
+    await useChatStore.getState().setSessionRuntimeMode(session!.id, "approval-required")
+
+    const persisted = storeData.get("chatState") as {
+      chatByWorktree: Record<string, { sessions: Array<{ runtimeMode?: string | null }> }>
+    }
+
+    expect(
+      useChatStore.getState().chatByWorktree["worktree-1"]?.sessions.find(
+        (candidate) => candidate.id === session!.id
+      )?.runtimeMode
+    ).toBe("approval-required")
+    expect(persisted.chatByWorktree["worktree-1"]?.sessions[0]?.runtimeMode).toBe(
+      "approval-required"
+    )
   })
 
   test("allows switching the harness on a draft session before it has a remote id", async () => {
@@ -342,6 +379,7 @@ describe("chatStore worktree scoping", () => {
       chatByWorktree: {},
       messagesBySession: {},
       activePromptBySession: {},
+      queuedMessagesBySession: {},
       sessionActivityById: {},
       currentSessionId: null,
       childSessions: new Map(),
@@ -384,6 +422,7 @@ describe("chatStore worktree scoping", () => {
       chatByWorktree: {},
       messagesBySession: {},
       activePromptBySession: {},
+      queuedMessagesBySession: {},
       sessionActivityById: {},
       currentSessionId: null,
       childSessions: new Map(),
@@ -456,6 +495,128 @@ describe("chatStore worktree scoping", () => {
     })
 
     await sendPromise
+  })
+
+  test("serializes concurrent sends for the same session", async () => {
+    type HarnessTurnValue = {
+      messages: Array<{
+        info: { id: string; sessionId: string; role: "assistant"; createdAt: number }
+        parts: Array<{ id: string; type: "text"; text: string }>
+      }>
+    }
+
+    let resolveHarnessTurn: ((value: HarnessTurnValue) => void) | null = null
+    pendingHarnessTurn = new Promise((resolve) => {
+      resolveHarnessTurn = resolve
+    })
+
+    const session = useChatStore.getState().createOptimisticSession("worktree-1", "/tmp/worktree-1")
+
+    expect(session).not.toBeNull()
+
+    const firstSendPromise = useChatStore.getState().sendMessage(session!.id, "First")
+    const secondSendPromise = useChatStore.getState().sendMessage(session!.id, "Second")
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(createSessionCallCount).toBe(1)
+    expect(harnessTurnInputs.map((input) => input.text)).toEqual(["First"])
+
+    resolveHarnessTurn!({
+      messages: [
+        {
+          info: {
+            id: "assistant-message-first",
+            sessionId: session!.id,
+            role: "assistant",
+            createdAt: Date.now(),
+          },
+          parts: [
+            {
+              id: "assistant-text-first",
+              type: "text",
+              text: "Pong",
+            },
+          ],
+        },
+      ],
+    })
+
+    await Promise.all([firstSendPromise, secondSendPromise])
+
+    expect(createSessionCallCount).toBe(1)
+    expect(harnessTurnInputs.map((input) => input.text)).toEqual(["First", "Second"])
+  })
+
+  test("tracks queued messages and skips removed queued turns", async () => {
+    type HarnessTurnValue = {
+      messages: Array<{
+        info: { id: string; sessionId: string; role: "assistant"; createdAt: number }
+        parts: Array<{ id: string; type: "text"; text: string }>
+      }>
+    }
+
+    let resolveHarnessTurn: ((value: HarnessTurnValue) => void) | null = null
+    pendingHarnessTurn = new Promise((resolve) => {
+      resolveHarnessTurn = resolve
+    })
+
+    const session = useChatStore.getState().createOptimisticSession("worktree-1", "/tmp/worktree-1")
+
+    expect(session).not.toBeNull()
+
+    const firstSendPromise = useChatStore.getState().sendMessage(session!.id, "First")
+    const secondSendPromise = useChatStore.getState().sendMessage(session!.id, "Second")
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const queuedMessages = useChatStore.getState().queuedMessagesBySession[session!.id] ?? []
+    expect(queuedMessages).toHaveLength(1)
+    expect(queuedMessages[0]?.text).toBe("Second")
+
+    const queuedMessageId = queuedMessages[0]?.id
+    expect(queuedMessageId).toBeTruthy()
+
+    useChatStore.getState().removeQueuedMessage(session!.id, queuedMessageId!)
+
+    resolveHarnessTurn!({
+      messages: [
+        {
+          info: {
+            id: "assistant-message-first",
+            sessionId: session!.id,
+            role: "assistant",
+            createdAt: Date.now(),
+          },
+          parts: [
+            {
+              id: "assistant-text-first",
+              type: "text",
+              text: "Pong",
+            },
+          ],
+        },
+      ],
+    })
+
+    await Promise.all([firstSendPromise, secondSendPromise])
+
+    expect(useChatStore.getState().queuedMessagesBySession[session!.id]).toBeUndefined()
+    expect(harnessTurnInputs.map((input) => input.text)).toEqual(["First"])
+  })
+
+  test("uses the selected runtime mode when creating and sending the first remote turn", async () => {
+    const session = useChatStore.getState().createOptimisticSession("worktree-1", "/tmp/worktree-1")
+
+    expect(session).not.toBeNull()
+
+    await useChatStore.getState().setSessionRuntimeMode(session!.id, "approval-required")
+    await useChatStore.getState().sendMessage(session!.id, "Ping")
+
+    expect(lastCreateSessionOptions).toEqual({
+      runtimeMode: "approval-required",
+    })
+    expect(lastHarnessTurnInput?.runtimeMode).toBe("approval-required")
   })
 
   test("marks a finished background session as unread until it is reselected", async () => {
@@ -631,6 +792,7 @@ describe("chatStore worktree scoping", () => {
       chatByWorktree: {},
       messagesBySession: {},
       activePromptBySession: {},
+      queuedMessagesBySession: {},
       sessionActivityById: {},
       currentSessionId: null,
       childSessions: new Map(),
@@ -676,6 +838,7 @@ describe("chatStore worktree scoping", () => {
       chatByWorktree: {},
       messagesBySession: {},
       activePromptBySession: {},
+      queuedMessagesBySession: {},
       sessionActivityById: {},
       currentSessionId: null,
       childSessions: new Map(),

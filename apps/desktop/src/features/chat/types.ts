@@ -10,6 +10,14 @@ export interface SessionActivityState {
   unread: boolean;
 }
 
+export interface QueuedChatMessage {
+  id: string;
+  sessionId: string;
+  text: string;
+  attachments: RuntimeAttachmentPart[];
+  createdAt: number;
+}
+
 export type TabType = "chat-session" | "file" | "diff" | "terminal";
 
 export interface Tab {
@@ -45,6 +53,7 @@ export interface RuntimeSession {
   remoteId?: string;
   harnessId: HarnessId;
   model?: string | null;
+  runtimeMode?: RuntimeModeKind;
   title?: string;
   projectPath?: string;
   parentSessionId?: string;
@@ -250,6 +259,12 @@ export interface RuntimePromptState {
 }
 
 export type CollaborationModeKind = "default" | "plan";
+export type RuntimeModeKind = "approval-required" | "auto-accept-edits" | "full-access";
+export const DEFAULT_RUNTIME_MODE: RuntimeModeKind = "full-access";
+
+export interface HarnessCreateSessionOptions {
+  runtimeMode?: RuntimeModeKind;
+}
 
 export interface HarnessTurnInput {
   session: RuntimeSession;
@@ -257,6 +272,7 @@ export interface HarnessTurnInput {
   text: string;
   agent?: string;
   collaborationMode?: CollaborationModeKind;
+  runtimeMode?: RuntimeModeKind;
   model?: string;
   reasoningEffort?: RuntimeReasoningEffort | null;
   fastMode?: boolean;
@@ -286,7 +302,10 @@ export interface HarnessTurnResult {
 export interface HarnessAdapter {
   definition: HarnessDefinition;
   initialize: () => Promise<void>;
-  createSession: (projectPath: string) => Promise<RuntimeSession>;
+  createSession: (
+    projectPath: string,
+    options?: HarnessCreateSessionOptions
+  ) => Promise<RuntimeSession>;
   listAgents: () => Promise<RuntimeAgent[]>;
   listCommands: (projectPath?: string) => Promise<RuntimeCommand[]>;
   listModels: () => Promise<RuntimeModel[]>;

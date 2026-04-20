@@ -22,8 +22,10 @@ import type {
 import type {
   ChatStatus,
   CollaborationModeKind,
+  QueuedChatMessage,
   RuntimePrompt,
   RuntimePromptResponse,
+  RuntimeModeKind,
   RuntimePromptState,
   RuntimeSession,
 } from "../types"
@@ -146,17 +148,21 @@ export function useChatComposerState({
   setInput: (value: string) => void
   attachments: DraftChatAttachment[]
   setAttachments: (attachments: DraftChatAttachment[]) => void
+  queuedMessages: QueuedChatMessage[]
   status: ChatStatus
   activePrompt: RuntimePrompt | null
   answerPrompt: (response: RuntimePromptResponse) => Promise<void>
   dismissPrompt: () => Promise<void>
   abort: () => Promise<void>
+  removeQueuedMessage: (queuedMessageId: string) => void
+  editQueuedMessage: (queuedMessageId: string) => void
   executeCommand: (command: string, args?: string) => Promise<boolean>
   submit: (
     text: string,
     options?: {
       agent?: string
       collaborationMode?: CollaborationModeKind
+      runtimeMode?: RuntimeModeKind
       model?: string
       reasoningEffort?: string | null
       fastMode?: boolean
@@ -169,10 +175,12 @@ export function useChatComposerState({
     initialize,
     sessionActivityById,
     activePromptBySession,
+    queuedMessagesBySession,
     createSession,
     createOptimisticSession,
     answerPrompt,
     dismissPrompt,
+    removeQueuedMessage,
     sendMessage,
     abortSession,
     executeCommand,
@@ -181,10 +189,12 @@ export function useChatComposerState({
       initialize: state.initialize,
       sessionActivityById: state.sessionActivityById,
       activePromptBySession: state.activePromptBySession,
+      queuedMessagesBySession: state.queuedMessagesBySession,
       createSession: state.createSession,
       createOptimisticSession: state.createOptimisticSession,
       answerPrompt: state.answerPrompt,
       dismissPrompt: state.dismissPrompt,
+      removeQueuedMessage: state.removeQueuedMessage,
       sendMessage: state.sendMessage,
       abortSession: state.abortSession,
       executeCommand: state.executeCommand,
@@ -199,6 +209,7 @@ export function useChatComposerState({
   const activePromptState: RuntimePromptState | null =
     activeSessionId ? activePromptBySession[activeSessionId] ?? null : null
   const activePrompt = activePromptState?.status === "active" ? activePromptState.prompt : null
+  const queuedMessages = activeSessionId ? queuedMessagesBySession[activeSessionId] ?? [] : []
   const uiStatus = activeSessionId ? sessionActivityById[activeSessionId]?.status ?? "idle" : "idle"
 
   const setInput = useCallback(
@@ -239,12 +250,47 @@ export function useChatComposerState({
     })
   }, [])
 
+  const handleRemoveQueuedMessage = useCallback(
+    (queuedMessageId: string) => {
+      if (!activeSessionId) {
+        return
+      }
+
+      removeQueuedMessage(activeSessionId, queuedMessageId)
+    },
+    [activeSessionId, removeQueuedMessage]
+  )
+
+  const handleEditQueuedMessage = useCallback(
+    (queuedMessageId: string) => {
+      if (!activeSessionId) {
+        return
+      }
+
+      const queuedMessage = queuedMessages.find((message) => message.id === queuedMessageId)
+      if (!queuedMessage) {
+        return
+      }
+
+      removeQueuedMessage(activeSessionId, queuedMessageId)
+      setDraftStateBySessionKey((current) => ({
+        ...current,
+        [draftSessionKey]: {
+          input: queuedMessage.text,
+          attachments: queuedMessage.attachments,
+        },
+      }))
+    },
+    [activeSessionId, draftSessionKey, queuedMessages, removeQueuedMessage]
+  )
+
   const submit = useCallback(
     async (
       text: string,
       options?: {
         agent?: string
         collaborationMode?: CollaborationModeKind
+        runtimeMode?: RuntimeModeKind
         model?: string
         reasoningEffort?: string | null
         fastMode?: boolean
@@ -254,9 +300,7 @@ export function useChatComposerState({
       const attachmentsToSend = options?.attachments ?? attachments
 
       if (
-        (!text.trim() && attachmentsToSend.length === 0) ||
-        uiStatus === "streaming" ||
-        uiStatus === "connecting"
+        (!text.trim() && attachmentsToSend.length === 0)
       ) {
         return false
       }
@@ -304,7 +348,6 @@ export function useChatComposerState({
       selectedWorktreePath,
       sendMessage,
       setInput,
-      uiStatus,
     ]
   )
 
@@ -370,11 +413,14 @@ export function useChatComposerState({
     setInput,
     attachments,
     setAttachments,
+    queuedMessages,
     status: uiStatus,
     activePrompt,
     answerPrompt: handleAnswerPrompt,
     dismissPrompt: handleDismissPrompt,
     abort,
+    removeQueuedMessage: handleRemoveQueuedMessage,
+    editQueuedMessage: handleEditQueuedMessage,
     executeCommand: handleExecuteCommand,
     submit,
   }
@@ -389,6 +435,7 @@ export function useNewWorkspaceSetupState(): {
     options?: {
       agent?: string
       collaborationMode?: CollaborationModeKind
+      runtimeMode?: RuntimeModeKind
       model?: string
       reasoningEffort?: string | null
       fastMode?: boolean
@@ -517,6 +564,7 @@ export function useNewWorkspaceSetupState(): {
       options?: {
         agent?: string
         collaborationMode?: CollaborationModeKind
+        runtimeMode?: RuntimeModeKind
         model?: string
         reasoningEffort?: string | null
         fastMode?: boolean
