@@ -1,4 +1,4 @@
 {
-  "buildCommand": "bun run site:build",
-  "outputDirectory": "apps/site/dist"
+  "buildCommand": "bun run build",
+  "outputDirectory": "dist"
 }
