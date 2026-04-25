@@ -41,6 +41,7 @@ function resetSettingsStore() {
   useSettingsStore.setState({
     appearanceThemeId: "system",
     appearanceTextSizePx: 13,
+    appearanceCornerStyle: "soft",
     terminalLinkTarget: "in-app",
     gitGenerationModel: "",
     gitResolvePrompts: {
@@ -124,12 +125,14 @@ describe("settingsStore resolve prompts", () => {
   test("initializes appearance settings from persisted values", async () => {
     storeData.set("appearanceThemeId", "dracula")
     storeData.set("appearanceTextSizePx", 16)
+    storeData.set("appearanceCornerStyle", "rounded")
     storeData.set("terminalLinkTarget", "system-browser")
 
     await useSettingsStore.getState().initialize()
 
     expect(useSettingsStore.getState().appearanceThemeId).toBe("dracula")
     expect(useSettingsStore.getState().appearanceTextSizePx).toBe(16)
+    expect(useSettingsStore.getState().appearanceCornerStyle).toBe("rounded")
     expect(useSettingsStore.getState().terminalLinkTarget).toBe("system-browser")
   })
 
@@ -138,12 +141,14 @@ describe("settingsStore resolve prompts", () => {
 
     useSettingsStore.getState().setAppearanceThemeId("nord")
     useSettingsStore.getState().setAppearanceTextSizePx(12)
+    useSettingsStore.getState().setAppearanceCornerStyle("square")
     useSettingsStore.getState().setTerminalLinkTarget("system-browser")
 
     await Bun.sleep(350)
 
     expect(storeData.get("appearanceThemeId")).toBe("nord")
     expect(storeData.get("appearanceTextSizePx")).toBe(12)
+    expect(storeData.get("appearanceCornerStyle")).toBe("square")
     expect(storeData.get("terminalLinkTarget")).toBe("system-browser")
   })
 
@@ -152,18 +157,22 @@ describe("settingsStore resolve prompts", () => {
 
     useSettingsStore.getState().setAppearanceThemeId("nord")
     useSettingsStore.getState().setAppearanceTextSizePx(12)
+    useSettingsStore.getState().setAppearanceCornerStyle("rounded")
     await Bun.sleep(350)
 
     useSettingsStore.getState().resetAppearanceThemeId()
     useSettingsStore.getState().resetAppearanceTextSizePx()
+    useSettingsStore.getState().resetAppearanceCornerStyle()
     useSettingsStore.getState().resetTerminalLinkTarget()
     await Bun.sleep(350)
 
     expect(storeData.get("appearanceThemeId")).toBe("system")
     expect(storeData.get("appearanceTextSizePx")).toBe(13)
+    expect(storeData.get("appearanceCornerStyle")).toBe("soft")
     expect(storeData.get("terminalLinkTarget")).toBe("in-app")
     expect(useSettingsStore.getState().appearanceThemeId).toBe("system")
     expect(useSettingsStore.getState().appearanceTextSizePx).toBe(13)
+    expect(useSettingsStore.getState().appearanceCornerStyle).toBe("soft")
     expect(useSettingsStore.getState().terminalLinkTarget).toBe("in-app")
   })
 

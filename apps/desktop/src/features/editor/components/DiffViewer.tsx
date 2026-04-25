@@ -20,13 +20,14 @@ export function DiffViewer({
   modified,
   modelKey,
   renderSideBySide = true,
-  fontSize = 13,
+  fontSize,
   paddingTop = 16,
 }: DiffViewerProps) {
   const language = getLanguageFromFilename(filename)
-  const { monacoThemeId } = useAppearance()
+  const { monacoThemeId, textSizePx } = useAppearance()
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const effectiveModelKey = modelKey ?? filename
+  const effectiveFontSize = fontSize ?? textSizePx
 
   useEffect(() => {
     return () => {
@@ -63,7 +64,7 @@ export function DiffViewer({
       options={{
         readOnly: true,
         minimap: { enabled: false },
-        fontSize,
+        fontSize: effectiveFontSize,
         lineNumbers: "on",
         scrollBeyondLastLine: false,
         wordWrap: "on",

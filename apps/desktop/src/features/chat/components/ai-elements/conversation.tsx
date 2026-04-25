@@ -34,6 +34,7 @@ interface ConversationScrollContextValue {
 }
 
 interface ConversationScrollStateValue {
+  isAtTop: boolean
   isAtBottom: boolean
   userDetached: boolean
   distanceFromBottom: number
@@ -86,6 +87,7 @@ export const Conversation = ({ className, children, ...props }: ConversationProp
   const [scrollElement, setScrollElementState] = useState<HTMLDivElement | null>(null)
   const [contentElement, setContentElementState] = useState<HTMLDivElement | null>(null)
   const [distanceFromBottom, setDistanceFromBottom] = useState(0)
+  const [isAtTop, setIsAtTop] = useState(true)
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [userDetached, setUserDetached] = useState(false)
 
@@ -112,11 +114,15 @@ export const Conversation = ({ className, children, ...props }: ConversationProp
         nextDistanceFromBottom,
         CONVERSATION_BOTTOM_THRESHOLD_PX
       )
+      const nextIsAtTop = element.scrollTop <= 1
 
       setDistanceFromBottom((previousValue) =>
         Math.abs(previousValue - nextDistanceFromBottom) < 0.5
           ? previousValue
           : nextDistanceFromBottom
+      )
+      setIsAtTop((previousValue) =>
+        previousValue === nextIsAtTop ? previousValue : nextIsAtTop
       )
       setIsAtBottom((previousValue) =>
         previousValue === nextIsAtBottom ? previousValue : nextIsAtBottom
@@ -383,11 +389,12 @@ export const Conversation = ({ className, children, ...props }: ConversationProp
 
   const stateValue = useMemo<ConversationScrollStateValue>(
     () => ({
+      isAtTop,
       isAtBottom,
       userDetached,
       distanceFromBottom,
     }),
-    [distanceFromBottom, isAtBottom, userDetached]
+    [distanceFromBottom, isAtBottom, isAtTop, userDetached]
   )
 
   return (

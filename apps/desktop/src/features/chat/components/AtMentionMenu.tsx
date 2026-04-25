@@ -61,7 +61,7 @@ export function AtMentionMenu({
       <div
         ref={containerRef}
         className={cn(
-          "w-full rounded-[6px] border border-border bg-card shadow-lg",
+          "w-full rounded-[6px] border border-border bg-popover text-popover-foreground shadow-lg",
           className
         )}
       >
@@ -77,7 +77,7 @@ export function AtMentionMenu({
       <div
         ref={containerRef}
         className={cn(
-          "w-full rounded-[6px] border border-border bg-card shadow-lg",
+          "w-full rounded-[6px] border border-border bg-popover text-popover-foreground shadow-lg",
           className
         )}
       >
@@ -92,7 +92,7 @@ export function AtMentionMenu({
     <div
       ref={containerRef}
       className={cn(
-        "w-full rounded-[6px] border border-border bg-card shadow-lg overflow-hidden",
+        "w-full rounded-[6px] border border-border bg-popover text-popover-foreground shadow-lg overflow-hidden",
         className
       )}
     >
@@ -109,13 +109,13 @@ export function AtMentionMenu({
                 "flex items-center gap-2 cursor-pointer rounded-[6px] px-2 py-2 text-sm mb-1 last:mb-0",
                 isSelected
                   ? "bg-accent text-accent-foreground"
-                  : "hover:bg-accent/50"
+                  : "hover:bg-accent/55 hover:text-accent-foreground"
               )}
             >
-              <Compass className="size-4 text-muted-foreground shrink-0" />
-              <span className="font-medium text-foreground">@{agent.name}</span>
+              <Compass className={cn("size-4 shrink-0", isSelected ? "text-accent-foreground" : "text-muted-foreground")} />
+              <span className="font-medium">@{agent.name}</span>
               {agent.description && (
-                <span className="text-muted-foreground truncate">
+                <span className={cn("truncate", isSelected ? "text-accent-foreground/78" : "text-muted-foreground")}>
                   {agent.description}
                 </span>
               )}
@@ -135,11 +135,11 @@ export function AtMentionMenu({
                 "flex items-center gap-2 cursor-pointer rounded-[6px] px-2 py-2 text-sm mb-1 last:mb-0",
                 isSelected
                   ? "bg-accent text-accent-foreground"
-                  : "hover:bg-accent/50"
+                  : "hover:bg-accent/55 hover:text-accent-foreground"
               )}
             >
-              <File className="size-4 text-muted-foreground shrink-0" />
-              <span className="text-foreground truncate">{file.path}</span>
+              <File className={cn("size-4 shrink-0", isSelected ? "text-accent-foreground" : "text-muted-foreground")} />
+              <span className="truncate">{file.path}</span>
             </div>
           )
         })}

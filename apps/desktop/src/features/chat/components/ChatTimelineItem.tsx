@@ -122,7 +122,7 @@ function TimelineTextBlock({
   return (
     <MessageComponent from="assistant">
       <MessageContent>
-        <div className={cn("w-full rounded-[22px] border px-4 py-3", toneClass)}>
+        <div className={cn("w-full rounded-2xl border px-4 py-3", toneClass)}>
           {eyebrow ? (
             <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
               {eyebrow}
@@ -225,7 +225,7 @@ function renderInlineCode(value: string, title?: string, className?: string) {
     <code
       title={title}
       className={cn(
-        "inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap rounded-[0.75rem] bg-muted/80 px-2 py-0.5 align-middle font-mono text-[0.95em] leading-tight text-foreground/92",
+        "inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap rounded-lg bg-muted/80 px-2 py-0.5 align-middle font-mono text-[0.95em] leading-tight text-foreground/92",
         className
       )}
     >
@@ -343,6 +343,7 @@ function SentAttachmentChip({
         kind={attachment.kind}
         label={attachment.label}
         title={`${attachment.label}\n${attachment.relativePath}`}
+        surface="user-message"
         onClick={() =>
           onOpenImagePreview({
             absolutePath: attachment.absolutePath,
@@ -359,6 +360,7 @@ function SentAttachmentChip({
       kind={attachment.kind}
       label={attachment.label}
       title={`${attachment.label}\n${attachment.relativePath}`}
+      surface="user-message"
     />
   )
 }

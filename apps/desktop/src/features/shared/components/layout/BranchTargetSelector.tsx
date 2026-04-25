@@ -1,5 +1,6 @@
 import { GitBranch, CaretRight } from "@/components/icons"
 import { SearchableSelect } from "@/features/shared/components/ui/searchable-select"
+import { contentTextClassNames, iconTextClassNames } from "@/features/shared/appearance"
 import { useProjectGitBranches } from "@/features/shared/hooks"
 import { ProjectIcon } from "@/features/workspace/components/ProjectIcon"
 import { useProjectStore } from "@/features/workspace/store"
@@ -45,17 +46,18 @@ export function BranchTargetSelector({
     <div className="hidden min-w-0 items-center gap-2 md:flex">
       <div
         className={cn(
-          "inline-flex min-w-0 max-w-[220px] items-center gap-1.5 text-sm font-medium text-foreground",
-          isLoading && "text-muted-foreground"
+          "inline-flex min-w-0 max-w-[220px] items-center gap-1.5 text-sm font-medium",
+          contentTextClassNames.default,
+          isLoading && contentTextClassNames.muted
         )}
       >
-        <span className="flex size-4 shrink-0 items-center justify-center">
-          <ProjectIcon project={project} size={14} className="shrink-0 rounded-[4px] text-muted-foreground" />
+        <span className={cn("flex size-4 shrink-0 items-center justify-center", iconTextClassNames.subtle)}>
+          <ProjectIcon project={project} size={14} className="shrink-0 rounded-[4px]" />
         </span>
         <span className="truncate">{currentBranch}</span>
       </div>
 
-      <CaretRight size={14} className="shrink-0 text-muted-foreground/70" />
+      <CaretRight size={14} className={cn("shrink-0", iconTextClassNames.muted)} />
 
       <SearchableSelect
         value={projectTargetBranch}
@@ -74,15 +76,21 @@ export function BranchTargetSelector({
         icon={<GitBranch size={15} />}
         searchPlaceholder="Search target branches"
         sectionLabel="Target branch"
-        emptyMessage="No matching branches found."
+        emptyIcon={<GitBranch size={17} />}
+        emptyTitle={branchData?.branches.length === 0 ? "No branches available" : "No matches"}
+        emptyMessage={
+          branchData?.branches.length === 0
+            ? "Once this repository has branches, you can choose a target branch here."
+            : "Try a different branch name."
+        }
         disabled={isLoading || !isGitSelectable}
         onOpen={() => {
           void refresh({ quiet: true })
         }}
         triggerVariant="ghost"
         className="min-w-0 items-center"
-        triggerClassName="max-w-[260px] gap-1.5 font-medium text-muted-foreground"
-        dropdownClassName="w-[300px]"
+        triggerClassName="max-w-[312px] gap-1.5 font-medium"
+        dropdownClassName="w-[360px]"
         errorMessage={loadError}
       />
     </div>

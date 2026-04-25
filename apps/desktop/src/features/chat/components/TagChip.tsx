@@ -56,7 +56,8 @@ export function TagChip({
         backgroundClassName,
         borderClassName,
         textClassName,
-        isClickable && "transition-colors hover:bg-muted focus:outline-none"
+        isClickable && "transition-colors focus:outline-none",
+        isClickable && !backgroundClassName && "hover:bg-muted"
       )}
     >
       <span

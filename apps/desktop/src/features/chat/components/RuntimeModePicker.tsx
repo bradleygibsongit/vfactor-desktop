@@ -58,7 +58,7 @@ export const RuntimeModePicker = memo(function RuntimeModePicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground transition-colors hover:bg-[var(--sidebar-item-hover)] hover:text-foreground cursor-pointer"
+        className="inline-flex h-6 max-h-6 items-center gap-1 rounded-md px-1.5 text-xs leading-none text-muted-foreground transition-colors hover:bg-[var(--sidebar-item-hover)] hover:text-foreground cursor-pointer"
         aria-label={selectedRuntimeModeOption.label}
       >
         <selectedRuntimeModeOption.Icon className="size-3.5 shrink-0" />

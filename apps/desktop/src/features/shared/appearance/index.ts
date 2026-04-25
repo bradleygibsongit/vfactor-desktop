@@ -1,9 +1,13 @@
 export {
   clampTextSizePx,
   CONCRETE_THEMES,
+  CORNER_STYLE_OPTIONS,
+  DEFAULT_CORNER_STYLE,
   DEFAULT_TEXT_SIZE_PX,
   DEFAULT_THEME_ID,
+  getCornerStyleRadius,
   getThemeDefinition,
+  isCornerStyle,
   isThemeId,
   MAX_TEXT_SIZE_PX,
   MIN_TEXT_SIZE_PX,
@@ -15,6 +19,7 @@ export {
   applyAppearance,
   bootstrapAppearance,
   getAppearanceSnapshot,
+  setAppearanceCornerStyle,
   setAppearanceState,
   setAppearanceTextSizePx,
   setAppearanceThemeId,
@@ -23,14 +28,17 @@ export {
 } from "./store"
 export { registerMonacoThemes } from "./monaco"
 export {
+  contentTextClassNames,
   feedbackIconClassName,
   feedbackSurfaceClassName,
+  iconTextClassNames,
   vcsSurfaceClassNames,
   vcsTextClassNames,
 } from "./semanticClasses"
 export type {
   AppearanceSnapshot,
   ConcreteThemeId,
+  CornerStyle,
   MonacoThemeMetadata,
   PierreThemeName,
   ResolvedAppearance,

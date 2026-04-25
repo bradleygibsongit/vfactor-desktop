@@ -28,6 +28,10 @@ interface SearchableSelectProps<T extends SearchableSelectOption = SearchableSel
   searchPlaceholder?: string
   /** Text shown when no options match the search */
   emptyMessage?: string
+  /** Optional title shown in the rich empty state */
+  emptyTitle?: string
+  /** Optional icon shown in the rich empty state */
+  emptyIcon?: ReactNode
   /** Label rendered above the option list */
   sectionLabel?: string
 
@@ -75,6 +79,8 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
   icon,
   searchPlaceholder = "Search…",
   emptyMessage = "No results found.",
+  emptyTitle = "Nothing found",
+  emptyIcon,
   sectionLabel,
   renderOption,
   renderIndicator,
@@ -233,9 +239,9 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
       isOpen && "border-ring ring-ring/50 ring-[3px]",
     ),
     ghost: cn(
-      "h-7 w-auto border-0 bg-transparent",
-      !disabled && "hover:bg-muted/70",
-      isOpen && "bg-muted",
+      "h-7 w-auto border-0 bg-transparent text-[color:var(--color-content-subtle)]",
+      !disabled && "hover:bg-accent/45 hover:text-[color:var(--color-content-strong)]",
+      isOpen && "bg-accent/55 text-[color:var(--color-content-strong)]",
     ),
   }
 
@@ -247,7 +253,7 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
         onClick={handleToggle}
         disabled={disabled}
         className={cn(
-          "flex items-center gap-2 rounded-lg px-2.5 text-sm transition-colors",
+          "searchable-select-trigger group/select flex items-center gap-2 rounded-lg px-2.5 text-sm transition-colors",
           disabled && "cursor-default opacity-50",
           variantStyles[triggerVariant],
           triggerClassName,
@@ -255,7 +261,17 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        {icon ? <span className="shrink-0 text-muted-foreground">{icon}</span> : null}
+        {icon ? (
+          <span
+            className={cn(
+              "shrink-0 text-[color:var(--color-icon-subtle)] transition-colors",
+              !disabled && "group-hover/select:text-[color:var(--color-icon-strong)]",
+              isOpen && "text-[color:var(--color-icon-strong)]"
+            )}
+          >
+            {icon}
+          </span>
+        ) : null}
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-left",
@@ -264,7 +280,14 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
         >
           {triggerLabel}
         </span>
-        <CaretDown size={14} className="shrink-0 text-muted-foreground" />
+        <CaretDown
+          size={14}
+          className={cn(
+            "shrink-0 text-[color:var(--color-icon-subtle)] transition-colors",
+            !disabled && "group-hover/select:text-[color:var(--color-icon-strong)]",
+            isOpen && "text-[color:var(--color-icon-strong)]"
+          )}
+        />
       </button>
 
       {isOpen && dropdownStyle
@@ -274,15 +297,15 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
               data-side={dropdownSide}
               style={dropdownStyle}
               className={cn(
-                "isolate z-50 flex min-w-[200px] flex-col overflow-hidden rounded-xl border border-sidebar-border bg-popover shadow-md ring-1 ring-foreground/10",
+                "searchable-select-surface isolate z-50 flex min-w-[200px] flex-col overflow-hidden rounded-xl border border-border/80 bg-popover text-popover-foreground shadow-[0_16px_38px_color-mix(in_oklab,black_10%,transparent)]",
                 "data-[side=bottom]:animate-in data-[side=bottom]:fade-in-0 data-[side=bottom]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2",
                 "data-[side=top]:animate-in data-[side=top]:fade-in-0 data-[side=top]:zoom-in-95 data-[side=top]:slide-in-from-bottom-2",
                 dropdownClassName,
               )}
             >
-              <div className="border-b border-sidebar-border p-2">
-                <InputGroup className="h-8 rounded-lg border-input/80 bg-input/30">
-                  <InputGroupAddon className="pl-2 text-muted-foreground">
+              <div className="border-b border-border/70 p-2">
+                <InputGroup className="searchable-select-input h-8 rounded-lg border-input/80 bg-input/45">
+                  <InputGroupAddon className="pl-2 text-[color:var(--color-icon-subtle)]">
                     <MagnifyingGlass size={16} />
                   </InputGroupAddon>
                   <InputGroupInput
@@ -296,8 +319,8 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
                 </InputGroup>
               </div>
 
-              {sectionLabel ? (
-                <div className="px-3 pt-3 pb-1 text-sm font-medium text-muted-foreground">
+              {sectionLabel && filteredOptions.length > 0 ? (
+                <div className="px-3 pt-3 pb-1 text-sm font-medium text-[color:var(--color-content-muted)]">
                   {sectionLabel}
                 </div>
               ) : null}
@@ -315,8 +338,8 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
                           onClick={() => handleSelect(option.value)}
                           disabled={busy}
                           className={cn(
-                            "group flex w-full items-start justify-between gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground",
-                            isSelected ? "text-foreground" : "text-foreground/92",
+                            "searchable-select-row group flex w-full items-start justify-between gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent/72 hover:text-accent-foreground",
+                            isSelected ? "bg-accent text-accent-foreground" : "text-[color:var(--color-content)]",
                             busy && "opacity-80",
                           )}
                         >
@@ -329,7 +352,14 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
                               </span>
                             )}
                           </span>
-                          <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-foreground">
+                          <span
+                            className={cn(
+                              "mt-0.5 flex size-4 shrink-0 items-center justify-center",
+                              isSelected
+                                ? "text-accent-foreground"
+                                : "text-[color:var(--color-icon-muted)] group-hover:text-accent-foreground"
+                            )}
+                          >
                             {(renderIndicator ?? defaultIndicator)(option, { isSelected })}
                           </span>
                         </button>
@@ -337,24 +367,34 @@ export function SearchableSelect<T extends SearchableSelectOption = SearchableSe
                     })}
                   </div>
                 ) : (
-                  <div className="px-3 py-4 text-center text-sm text-muted-foreground">
-                    {emptyMessage}
+                  <div className="flex min-h-32 flex-col items-center justify-center px-5 py-6 text-center">
+                    {emptyIcon ? (
+                      <div className="mb-3 flex size-9 items-center justify-center rounded-md border border-border/70 bg-muted/35 text-[color:var(--color-icon-subtle)]">
+                        {emptyIcon}
+                      </div>
+                    ) : null}
+                    <div className="text-sm font-medium text-[color:var(--color-content)]">
+                      {emptyTitle}
+                    </div>
+                    <div className="mt-1 max-w-[22rem] text-sm leading-5 text-[color:var(--color-content-muted)]">
+                      {emptyMessage}
+                    </div>
                   </div>
                 )}
               </div>
 
               {errorMessage ? (
-                <div className="border-t border-sidebar-border px-3 py-2 text-sm text-[color:var(--color-destructive)]">
+                <div className="border-t border-border/70 px-3 py-2 text-sm text-[color:var(--color-destructive)]">
                   {errorMessage}
                 </div>
               ) : statusMessage ? (
-                <div className="border-t border-sidebar-border px-3 py-2 text-sm text-muted-foreground">
+                <div className="border-t border-border/70 px-3 py-2 text-sm text-[color:var(--color-content-muted)]">
                   {statusMessage}
                 </div>
               ) : null}
 
               {footer ? (
-                <div className="sticky bottom-0 border-t border-sidebar-border bg-popover p-1">
+                <div className="sticky bottom-0 border-t border-border/70 bg-popover p-1">
                   {footer}
                 </div>
               ) : null}

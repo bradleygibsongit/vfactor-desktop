@@ -20,6 +20,7 @@ import {
   ConversationContent,
   ConversationScrollButton,
   useConversationScrollContext,
+  useConversationScrollState,
 } from "./ai-elements/conversation"
 import {
   Message as MessageComponent,
@@ -466,6 +467,7 @@ export function ChatMessages({
           ) : null}
         </>
       </ConversationContent>
+      <ConversationEdgeFades />
       <ConversationScrollButton />
       <ChatImagePreviewModal
         image={previewImage}
@@ -477,6 +479,27 @@ export function ChatMessages({
         }}
       />
     </Conversation>
+  )
+}
+
+function ConversationEdgeFades() {
+  const { isAtTop, isAtBottom } = useConversationScrollState()
+
+  return (
+    <>
+      <div
+        className={cn(
+          "chat-top-fade pointer-events-none absolute inset-x-0 top-0 z-10 h-9 transition-opacity duration-150",
+          isAtTop ? "opacity-0" : "opacity-100"
+        )}
+      />
+      <div
+        className={cn(
+          "chat-bottom-fade pointer-events-none absolute inset-x-0 bottom-0 z-10 h-10 transition-opacity duration-150",
+          isAtBottom ? "opacity-0" : "opacity-100"
+        )}
+      />
+    </>
   )
 }
 

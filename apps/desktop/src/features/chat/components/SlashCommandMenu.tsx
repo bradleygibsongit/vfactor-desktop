@@ -46,7 +46,7 @@ function SlashMenuShell({
     <div
       ref={containerRef}
       className={cn(
-        "chat-composer-shell w-full overflow-hidden rounded-2xl border bg-popover shadow-[0_18px_42px_color-mix(in_oklab,black_10%,transparent)]",
+        "w-full overflow-hidden rounded-lg border border-border/70 bg-popover text-popover-foreground shadow-[0_16px_38px_color-mix(in_oklab,black_10%,transparent)]",
         className
       )}
     >
@@ -56,13 +56,16 @@ function SlashMenuShell({
 }
 
 const slashMenuHeadingClassName =
-  "sticky top-[-0.25rem] z-10 -mx-1 mb-0.5 border-b border-border/35 bg-[color:color-mix(in_oklab,var(--popover)_82%,transparent)] px-3 py-2 text-[10px] font-medium uppercase tracking-[0.15em] text-sidebar-foreground/38 backdrop-blur-md"
+  "px-2 pb-1.5 pt-2 text-[10px] font-medium uppercase tracking-[0.13em] text-muted-foreground/62"
 
 const slashMenuSelectedItemClassName =
-  "bg-accent text-accent-foreground ring-1 ring-inset ring-border/70 shadow-[inset_0_1px_0_color-mix(in_oklab,var(--foreground)_8%,transparent)]"
+  "bg-accent/72 text-accent-foreground"
 
 const slashMenuIdleItemClassName =
-  "text-foreground/88 hover:bg-[var(--sidebar-item-hover)] hover:text-foreground"
+  "text-foreground/86 hover:bg-accent/44 hover:text-accent-foreground"
+
+const slashMenuItemClassName =
+  "relative flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors"
 
 export function SlashCommandMenu(props: SlashCommandMenuProps) {
   const { onClose, selectedIndex, className } = props
@@ -146,35 +149,37 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
   if (isThemePage) {
     return (
       <SlashMenuShell containerRef={containerRef} className={className}>
-        <div ref={scrollContainerRef} className="app-scrollbar max-h-64 overflow-y-auto p-1">
+        <div ref={scrollContainerRef} className="app-scrollbar max-h-64 overflow-y-auto p-1.5">
           <div className={slashMenuHeadingClassName}>
             Themes
           </div>
-          {themes.map((theme, index) => {
-            const isSelected = selectedIndex === index
-            const isActive = activeThemeId === theme.id
+          <div className="space-y-0.5">
+            {themes.map((theme, index) => {
+              const isSelected = selectedIndex === index
+              const isActive = activeThemeId === theme.id
 
-            return (
-              <div
-                key={theme.id}
-                ref={isSelected ? selectedRef : undefined}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onSelectTheme?.(theme.id, index)}
-                className={cn(
-                  "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-                  isSelected ? slashMenuSelectedItemClassName : slashMenuIdleItemClassName
-                )}
-              >
-                <span className={cn(
-                  "flex size-4 shrink-0 items-center justify-center",
-                  isSelected ? "text-accent-foreground" : "text-muted-foreground/78"
-                )}>
-                  {isActive ? <CheckCircle size={14} /> : <Circle size={14} />}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-medium">{theme.label}</span>
-              </div>
-            )
-          })}
+              return (
+                <div
+                  key={theme.id}
+                  ref={isSelected ? selectedRef : undefined}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onSelectTheme?.(theme.id, index)}
+                  className={cn(
+                    slashMenuItemClassName,
+                    isSelected ? slashMenuSelectedItemClassName : slashMenuIdleItemClassName
+                  )}
+                >
+                  <span className={cn(
+                    "flex size-4 shrink-0 items-center justify-center",
+                    isSelected ? "text-accent-foreground" : "text-muted-foreground/78"
+                  )}>
+                    {isActive ? <CheckCircle size={14} /> : <Circle size={14} />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{theme.label}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </SlashMenuShell>
     )
@@ -182,7 +187,7 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
 
   return (
     <SlashMenuShell containerRef={containerRef} className={className}>
-      <div ref={scrollContainerRef} className="app-scrollbar max-h-64 overflow-y-auto p-1">
+      <div ref={scrollContainerRef} className="app-scrollbar max-h-64 overflow-y-auto p-1.5">
         {sections.map((section, sectionIndex) => {
           let runningIndex = 0
           for (let i = 0; i < sectionIndex; i += 1) {
@@ -190,73 +195,78 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           }
 
           return (
-            <div key={section.key} className={cn(sectionIndex > 0 && "mt-1.5")}>
+            <div key={section.key} className={cn(sectionIndex > 0 && "mt-2")}>
               <div className={slashMenuHeadingClassName}>
                 {section.label}
               </div>
 
-              {section.commands.map((cmd, index) => {
-                const flatIndex = runningIndex + index
-                const isSelected = selectedIndex === flatIndex
-                const Icon =
-                  cmd.icon === "new-chat"
-                    ? PencilSimple
-                    : cmd.icon === "new-terminal"
-                      ? Terminal
-                      : cmd.icon === "theme"
-                        ? Circle
-                      : cmd.icon === "command"
+              <div className="space-y-0.5">
+                {section.commands.map((cmd, index) => {
+                  const flatIndex = runningIndex + index
+                  const isSelected = selectedIndex === flatIndex
+                  const Icon =
+                    cmd.icon === "new-chat"
+                      ? PencilSimple
+                      : cmd.icon === "new-terminal"
                         ? Terminal
-                      : BookOpen
-                return (
-                  <div
-                    key={cmd.id}
-                    ref={isSelected ? selectedRef : undefined}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onSelect?.(cmd)}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-                      isSelected ? slashMenuSelectedItemClassName : slashMenuIdleItemClassName
-                    )}
-                  >
-                    {cmd.projectAction ? (
-                      <ProjectActionIcon
-                        action={cmd.projectAction}
-                        size={14}
-                        className={cn(
-                          "shrink-0",
-                          isSelected ? "text-accent-foreground" : "text-muted-foreground/78"
-                        )}
-                      />
-                    ) : (
-                      <Icon
-                        size={14}
-                        className={cn(
-                          "shrink-0",
-                          isSelected ? "text-accent-foreground" : "text-muted-foreground/78"
-                        )}
-                      />
-                    )}
+                        : cmd.icon === "theme"
+                          ? Circle
+                        : cmd.icon === "command"
+                          ? Terminal
+                        : BookOpen
+                  return (
+                    <div
+                      key={cmd.id}
+                      ref={isSelected ? selectedRef : undefined}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => onSelect?.(cmd)}
+                      className={cn(
+                        slashMenuItemClassName,
+                        isSelected ? slashMenuSelectedItemClassName : slashMenuIdleItemClassName
+                      )}
+                    >
+                      {cmd.projectAction ? (
+                        <ProjectActionIcon
+                          action={cmd.projectAction}
+                          size={14}
+                          className={cn(
+                            "shrink-0",
+                            isSelected ? "text-accent-foreground" : "text-muted-foreground/78"
+                          )}
+                        />
+                      ) : (
+                        <Icon
+                          size={14}
+                          className={cn(
+                            "shrink-0",
+                            isSelected ? "text-accent-foreground" : "text-muted-foreground/78"
+                          )}
+                        />
+                      )}
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate font-medium">
-                          {cmd.name}
-                        </span>
-                        {cmd.inputHint ? (
-                          <span className="truncate text-xs text-muted-foreground/70">
-                            {cmd.inputHint}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate font-medium">
+                            {cmd.name}
                           </span>
-                        ) : null}
+                          {cmd.inputHint ? (
+                            <span className={cn(
+                              "truncate text-xs",
+                              isSelected ? "text-accent-foreground/78" : "text-muted-foreground/70"
+                            )}>
+                              {cmd.inputHint}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
 
-                    {cmd.description ? (
-                      <InfoTooltip description={cmd.description} isSelected={isSelected} />
-                    ) : null}
-                  </div>
-                )
-              })}
+                      {cmd.description ? (
+                        <InfoTooltip description={cmd.description} isSelected={isSelected} />
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )
         })}
@@ -277,7 +287,7 @@ function InfoTooltip({ description, isSelected }: { description: string; isSelec
             "ml-auto shrink-0 rounded-md p-0.5 transition-colors",
             isSelected
               ? "text-accent-foreground/70 hover:bg-[color:color-mix(in_oklab,var(--accent-foreground)_12%,transparent)] hover:text-accent-foreground"
-              : "text-muted-foreground/50 hover:bg-[var(--sidebar-item-hover)] hover:text-muted-foreground"
+              : "text-muted-foreground/60 hover:bg-accent/55 hover:text-accent-foreground"
           )}
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {

@@ -4,10 +4,13 @@ import { loadDesktopStore, type DesktopStoreHandle } from "@/desktop/client"
 import type { HarnessId } from "@/features/chat/types"
 import {
   clampTextSizePx,
+  DEFAULT_CORNER_STYLE,
   DEFAULT_TEXT_SIZE_PX,
   DEFAULT_THEME_ID,
+  isCornerStyle,
   isThemeId,
   setAppearanceState,
+  type CornerStyle,
   type ThemeId,
 } from "@/features/shared/appearance"
 import {
@@ -19,6 +22,7 @@ import {
 const STORE_FILE = "settings.json"
 const APPEARANCE_THEME_ID_KEY = "appearanceThemeId"
 const APPEARANCE_TEXT_SIZE_KEY = "appearanceTextSizePx"
+const APPEARANCE_CORNER_STYLE_KEY = "appearanceCornerStyle"
 const TERMINAL_LINK_TARGET_KEY = "terminalLinkTarget"
 const GIT_GENERATION_MODEL_KEY = "gitGenerationModel"
 const GIT_RESOLVE_PROMPTS_KEY = "gitResolvePrompts"
@@ -46,6 +50,7 @@ export type HarnessDefaultsRecord = Record<HarnessId, HarnessDefaults>
 interface PersistedSettings {
   appearanceThemeId: ThemeId
   appearanceTextSizePx: number
+  appearanceCornerStyle: CornerStyle
   terminalLinkTarget: TerminalLinkTarget
   gitGenerationModel: string
   gitResolvePrompts: GitResolvePrompts
@@ -61,6 +66,8 @@ interface SettingsState extends PersistedSettings {
   resetAppearanceThemeId: () => void
   setAppearanceTextSizePx: (sizePx: number) => void
   resetAppearanceTextSizePx: () => void
+  setAppearanceCornerStyle: (style: CornerStyle) => void
+  resetAppearanceCornerStyle: () => void
   setTerminalLinkTarget: (target: TerminalLinkTarget) => void
   resetTerminalLinkTarget: () => void
   setGitGenerationModel: (model: string) => void
@@ -97,6 +104,7 @@ export const DEFAULT_HARNESS_DEFAULTS: HarnessDefaultsRecord = {
 const DEFAULT_PERSISTED_SETTINGS: PersistedSettings = {
   appearanceThemeId: DEFAULT_THEME_ID,
   appearanceTextSizePx: DEFAULT_TEXT_SIZE_PX,
+  appearanceCornerStyle: DEFAULT_CORNER_STYLE,
   terminalLinkTarget: "in-app",
   gitGenerationModel: "",
   gitResolvePrompts: createDefaultGitResolvePrompts(),
@@ -129,6 +137,10 @@ export function normalizeAppearanceThemeId(themeId: string | null | undefined): 
 
 export function normalizeAppearanceTextSizePx(value: number | null | undefined): number {
   return clampTextSizePx(value)
+}
+
+export function normalizeAppearanceCornerStyle(value: string | null | undefined): CornerStyle {
+  return isCornerStyle(value) ? value : DEFAULT_CORNER_STYLE
 }
 
 export function normalizeTerminalLinkTarget(
@@ -185,6 +197,7 @@ function buildPersistedSettings(source: Partial<PersistedSettings>): PersistedSe
   return {
     appearanceThemeId: normalizeAppearanceThemeId(source.appearanceThemeId),
     appearanceTextSizePx: normalizeAppearanceTextSizePx(source.appearanceTextSizePx),
+    appearanceCornerStyle: normalizeAppearanceCornerStyle(source.appearanceCornerStyle),
     terminalLinkTarget: normalizeTerminalLinkTarget(source.terminalLinkTarget),
     gitGenerationModel: normalizeGitGenerationModel(source.gitGenerationModel),
     gitResolvePrompts: normalizeGitResolvePrompts(source.gitResolvePrompts),
@@ -200,6 +213,7 @@ function selectPersistedSettings(
   return buildPersistedSettings({
     appearanceThemeId: state.appearanceThemeId,
     appearanceTextSizePx: state.appearanceTextSizePx,
+    appearanceCornerStyle: state.appearanceCornerStyle,
     terminalLinkTarget: state.terminalLinkTarget,
     gitGenerationModel: state.gitGenerationModel,
     gitResolvePrompts: state.gitResolvePrompts,
@@ -222,6 +236,7 @@ function schedulePersist(settings: PersistedSettings): void {
         const store = await getStore()
         await store.set(APPEARANCE_THEME_ID_KEY, settings.appearanceThemeId)
         await store.set(APPEARANCE_TEXT_SIZE_KEY, settings.appearanceTextSizePx)
+        await store.set(APPEARANCE_CORNER_STYLE_KEY, settings.appearanceCornerStyle)
         await store.set(TERMINAL_LINK_TARGET_KEY, settings.terminalLinkTarget)
         await store.set(GIT_GENERATION_MODEL_KEY, settings.gitGenerationModel)
         await store.set(GIT_RESOLVE_PROMPTS_KEY, settings.gitResolvePrompts)
@@ -271,6 +286,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
           const store = await getStore()
           const savedAppearanceThemeId = await store.get<string>(APPEARANCE_THEME_ID_KEY)
           const savedAppearanceTextSizePx = await store.get<number>(APPEARANCE_TEXT_SIZE_KEY)
+          const savedAppearanceCornerStyle = await store.get<string>(APPEARANCE_CORNER_STYLE_KEY)
           const savedTerminalLinkTarget = await store.get<string>(TERMINAL_LINK_TARGET_KEY)
           const savedModel = await store.get<string>(GIT_GENERATION_MODEL_KEY)
           const savedResolvePrompts =
@@ -297,6 +313,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
           const persistedSettings = buildPersistedSettings({
             appearanceThemeId: savedAppearanceThemeId,
             appearanceTextSizePx: savedAppearanceTextSizePx,
+            appearanceCornerStyle: savedAppearanceCornerStyle,
             terminalLinkTarget: savedTerminalLinkTarget,
             gitGenerationModel: savedModel,
             gitResolvePrompts: savedResolvePrompts,
@@ -329,6 +346,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
             {
               themeId: persistedSettings.appearanceThemeId,
               textSizePx: persistedSettings.appearanceTextSizePx,
+              cornerStyle: persistedSettings.appearanceCornerStyle,
             },
             { notify: false }
           )
@@ -343,6 +361,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
             {
               themeId: DEFAULT_THEME_ID,
               textSizePx: DEFAULT_TEXT_SIZE_PX,
+              cornerStyle: DEFAULT_CORNER_STYLE,
             },
             { notify: false }
           )
@@ -382,6 +401,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       set({ appearanceTextSizePx: DEFAULT_TEXT_SIZE_PX })
       setAppearanceState({ textSizePx: DEFAULT_TEXT_SIZE_PX })
       persistWith({ appearanceTextSizePx: DEFAULT_TEXT_SIZE_PX })
+    },
+
+    setAppearanceCornerStyle: (style) => {
+      const normalizedStyle = normalizeAppearanceCornerStyle(style)
+      set({ appearanceCornerStyle: normalizedStyle })
+      setAppearanceState({ cornerStyle: normalizedStyle })
+      persistWith({ appearanceCornerStyle: normalizedStyle })
+    },
+
+    resetAppearanceCornerStyle: () => {
+      set({ appearanceCornerStyle: DEFAULT_CORNER_STYLE })
+      setAppearanceState({ cornerStyle: DEFAULT_CORNER_STYLE })
+      persistWith({ appearanceCornerStyle: DEFAULT_CORNER_STYLE })
     },
 
     setTerminalLinkTarget: (target) => {

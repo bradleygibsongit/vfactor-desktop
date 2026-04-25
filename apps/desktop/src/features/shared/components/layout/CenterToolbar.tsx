@@ -11,6 +11,7 @@ import { useProjectStore } from "@/features/workspace/store"
 import { ProjectActionsControl } from "@/features/workspace/components/ProjectActionsControl"
 import { prewarmProjectData } from "@/features/shared/utils/prewarmProjectData"
 import { DESKTOP_LEFT_TOGGLE_OFFSET } from "./layoutSizing"
+import { iconTextClassNames } from "@/features/shared/appearance"
 
 interface CenterToolbarProps {
   activeView?: "chat" | "settings" | "automations"
@@ -46,8 +47,9 @@ export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
       variant="ghost"
       size="icon-sm"
       className={cn(
-        "text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out hover:bg-sidebar-accent hover:text-foreground active:scale-[0.97]",
-        !isLeftCollapsed && "bg-sidebar-accent/60 text-foreground"
+        "transition-[background-color,color,transform] duration-150 ease-out hover:bg-sidebar-accent active:scale-[0.97]",
+        iconTextClassNames.subtle,
+        !isLeftCollapsed && `bg-sidebar-accent/60 ${iconTextClassNames.strong}`
       )}
       style={noDragStyle}
       aria-label="Toggle left sidebar"
@@ -102,8 +104,9 @@ export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
                 variant="ghost"
                 size="icon-sm"
                 className={cn(
-                  "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
-                  !isRightCollapsed && "bg-sidebar-accent text-foreground"
+                  "hover:bg-sidebar-accent",
+                  iconTextClassNames.subtle,
+                  !isRightCollapsed && `bg-sidebar-accent ${iconTextClassNames.strong}`
                 )}
                 style={noDragStyle}
                 aria-label="Toggle right sidebar"
@@ -126,7 +129,7 @@ export function CenterToolbar({ activeView = "chat" }: CenterToolbarProps) {
               onPointerEnter={handleRightSidebarIntent}
               variant="ghost"
               size="icon-sm"
-              className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              className={cn("hover:bg-sidebar-accent", iconTextClassNames.subtle)}
               style={noDragStyle}
               aria-label="Toggle right sidebar"
             >

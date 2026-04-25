@@ -96,7 +96,7 @@ function TreeItem<T = any>({ item, className, asChild, children, ...props }: Omi
         data-slot="tree-item"
         style={mergedStyle}
         className={cn(
-          'z-10 w-full text-left ps-(--tree-padding) outline-hidden select-none not-last:pb-0.5 focus:z-20 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+          'z-10 w-full cursor-pointer text-left ps-(--tree-padding) outline-hidden select-none not-last:pb-0.5 focus:z-20 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
           className,
         )}
         data-focus={typeof item.isFocused === 'function' ? item.isFocused() || false : undefined}

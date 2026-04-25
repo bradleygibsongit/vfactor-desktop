@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/features/shared/components/ui/alert-dialog"
+import { contentTextClassNames, iconTextClassNames } from "@/features/shared/appearance"
 import { Button } from "@/features/shared/components/ui/button"
 import {
   DropdownMenu,
@@ -710,7 +711,9 @@ export function SourceControlActionGroup({
       onClick={() => void runQuickAction()}
       disabled={isBusy || quickAction.disabled}
       className={cn(
-        "h-7 rounded-r-none border-r-0 border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
+        "h-7 rounded-r-none border-r-0 border-control-border bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
+        contentTextClassNames.default,
+        "[&_svg]:text-[color:var(--color-icon)]",
         quickAction.tone === "warning" &&
           "border-[color:var(--color-warning-border)] bg-[color:var(--color-warning-surface)] text-[color:var(--color-warning-surface-foreground)] hover:bg-[color:var(--color-warning-surface)]/85 hover:text-[color:var(--color-warning-surface-foreground)]",
         quickAction.tone === "danger" &&
@@ -763,7 +766,9 @@ export function SourceControlActionGroup({
                 }
                 disabled={isBusy}
                 className={cn(
-                  "h-7 border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
+                  "h-7 border-control-border bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
+                  contentTextClassNames.default,
+                  "[&_svg]:text-[color:var(--color-icon)]",
                   feedbackTone === "error" && feedbackMessage ? "border-destructive/50" : undefined,
                   className
                 )}
@@ -798,7 +803,10 @@ export function SourceControlActionGroup({
                     type="button"
                     variant="outline"
                     size="icon-sm"
-                    className="h-7 w-8 rounded-l-none border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]"
+                    className={cn(
+                      "h-7 w-8 rounded-l-none border-control-border bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
+                      iconTextClassNames.default
+                    )}
                     aria-label="Open git actions menu"
                     disabled={isBusy}
                   />
@@ -809,14 +817,14 @@ export function SourceControlActionGroup({
               <DropdownMenuContent
                 align="end"
                 sideOffset={8}
-                className="w-44 border border-border/70 bg-card p-0.5 shadow-lg"
+                className="w-44 border border-sidebar-border bg-sidebar p-0.5 text-sidebar-foreground shadow-lg"
               >
                 {menuItems.map((item) => (
                   <DropdownMenuItem
                     key={item.id}
                     disabled={item.disabled}
                     onClick={() => void handleMenuItem(item)}
-                    className="min-h-7 gap-1.5 px-1.5 py-0.5"
+                    className="min-h-7 gap-1.5 px-1.5 py-0.5 focus:bg-[var(--sidebar-item-hover)] focus:text-sidebar-foreground focus:**:text-sidebar-foreground"
                   >
                     <GitActionIcon icon={item.icon} />
                     <span>{item.label}</span>

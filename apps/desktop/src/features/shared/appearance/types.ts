@@ -1,21 +1,41 @@
 export type ResolvedAppearance = "light" | "dark"
 
+export type CornerStyle = "square" | "soft" | "rounded"
+
 export type ThemeId =
   | "system"
   | "nucleus-light"
   | "nucleus-dark"
+  | "tokyonight"
+  | "everforest"
+  | "ayu"
+  | "catppuccin"
   | "catppuccin-latte"
+  | "catppuccin-macchiato"
   | "catppuccin-mocha"
+  | "gruvbox"
+  | "kanagawa"
   | "rose-pine-dawn"
   | "rose-pine-main"
-  | "tokyo-night-day"
+  | "henna"
+  | "github-light"
   | "tokyo-night-storm"
   | "nord"
+  | "matrix"
+  | "night-owl"
   | "dracula"
   | "ayu-light"
   | "ayu-mirage"
   | "kanagawa-lotus"
   | "kanagawa-dragon"
+  | "noctis"
+  | "rainglow"
+  | "cyberpunk"
+  | "gruvbox-material"
+  | "moonlight"
+  | "aurora-x"
+  | "field-lights"
+  | "just-black"
 
 export type ConcreteThemeId = Exclude<ThemeId, "system">
 export type PierreThemeName = "pierre-light" | "pierre-dark"
@@ -23,6 +43,14 @@ export type PierreThemeName = "pierre-light" | "pierre-dark"
 export const THEME_TOKEN_NAMES = [
   "background",
   "foreground",
+  "content-strong",
+  "content",
+  "content-subtle",
+  "content-muted",
+  "icon-strong",
+  "icon",
+  "icon-subtle",
+  "icon-muted",
   "card",
   "card-foreground",
   "popover",
@@ -41,6 +69,7 @@ export const THEME_TOKEN_NAMES = [
   "destructive-surface-foreground",
   "destructive-border",
   "border",
+  "control-border",
   "input",
   "ring",
   "cta",
@@ -161,6 +190,7 @@ export interface AppearanceSnapshot {
   resolvedAppearance: ResolvedAppearance
   resolvedThemeId: ConcreteThemeId
   textSizePx: number
+  cornerStyle: CornerStyle
   theme: ThemeDefinition
   monacoThemeId: string
   pierreDiffTheme: PierreThemeName

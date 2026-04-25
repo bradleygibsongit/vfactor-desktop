@@ -192,7 +192,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             <button
               type="submit"
               disabled={!canSubmit && !showSlashMenu && !showAtMenu}
-              className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+              className="chat-composer-send-button flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
             >
               <ArrowUp02 weight="bold" className="size-3.5" />
             </button>
@@ -201,7 +201,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
               type="button"
               onClick={onAbort}
               disabled={!onAbort}
-              className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+              className="chat-composer-send-button flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
             >
               <Stop weight="fill" className="size-3.5" />
             </button>

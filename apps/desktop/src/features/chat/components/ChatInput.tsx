@@ -1070,7 +1070,7 @@ export function ChatInput({
     <form
       onSubmit={handleSubmit}
       className={cn(
-        placement === "intro" ? "w-full bg-transparent px-0 pb-0" : "chat-main-surface px-6 pb-3"
+        placement === "intro" ? "w-full bg-transparent px-0 pb-0" : "chat-main-surface px-6 pb-1.5"
       )}
       aria-busy={isComposerLocked}
     >
@@ -1095,8 +1095,7 @@ export function ChatInput({
           <div
             ref={composerMenuAnchorRef}
             className={cn(
-              "chat-composer-shell relative overflow-hidden border shadow-sm",
-              placement === "intro" ? "rounded-xl" : "rounded-2xl",
+              "chat-composer-shell chat-composer-input-surface relative overflow-hidden border shadow-sm",
               isPlanModeEnabled
                 ? "border-[var(--color-chat-plan-border)] bg-[var(--color-chat-plan-surface)] shadow-[0_0_0_1px_var(--color-chat-plan-border)]"
                 : "border-transparent"
@@ -1233,7 +1232,7 @@ export function ChatInput({
         </div>
 
         {!isPromptActive && !isComposerLocked && selectorsRow ? (
-          <div className="mt-2 flex min-h-9 items-center px-1 text-muted-foreground">
+          <div className="mt-1 flex h-6 items-center overflow-hidden px-1 text-muted-foreground">
             <RuntimeModePicker
               runtimeMode={runtimeMode}
               onSelectRuntimeMode={handleRuntimeModePickerSelect}

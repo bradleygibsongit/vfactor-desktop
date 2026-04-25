@@ -2,21 +2,26 @@ import { useSyncExternalStore } from "react"
 import { desktop, loadDesktopStore } from "@/desktop/client"
 import {
   clampTextSizePx,
+  DEFAULT_CORNER_STYLE,
   DEFAULT_TEXT_SIZE_PX,
   DEFAULT_THEME_ID,
+  getCornerStyleRadius,
+  isCornerStyle,
   getThemeDefinition,
   isThemeId,
   resolveThemeIdForAppearance,
 } from "./themeRegistry"
-import type { AppearanceSnapshot, ConcreteThemeId, ResolvedAppearance, ThemeId } from "./types"
+import type { AppearanceSnapshot, ConcreteThemeId, CornerStyle, ResolvedAppearance, ThemeId } from "./types"
 
 const SETTINGS_STORE_FILE = "settings.json"
 const APPEARANCE_THEME_ID_KEY = "appearanceThemeId"
 const APPEARANCE_TEXT_SIZE_KEY = "appearanceTextSizePx"
+const APPEARANCE_CORNER_STYLE_KEY = "appearanceCornerStyle"
 
 type AppearanceOverrides = {
   themeId?: ThemeId
   textSizePx?: number
+  cornerStyle?: CornerStyle
   systemAppearance?: ResolvedAppearance
 }
 
@@ -36,6 +41,7 @@ function getSystemAppearance(): ResolvedAppearance {
 function buildSnapshot(
   themeId: ThemeId,
   textSizePx: number,
+  cornerStyle: CornerStyle,
   systemAppearance: ResolvedAppearance
 ): AppearanceSnapshot {
   const resolvedAppearance =
@@ -49,13 +55,14 @@ function buildSnapshot(
     resolvedAppearance,
     resolvedThemeId,
     textSizePx: clampTextSizePx(textSizePx),
+    cornerStyle,
     theme,
     monacoThemeId: theme.monaco.id,
     pierreDiffTheme: theme.adapters.diff.pierreTheme,
   }
 }
 
-let snapshot = buildSnapshot(DEFAULT_THEME_ID, DEFAULT_TEXT_SIZE_PX, "light")
+let snapshot = buildSnapshot(DEFAULT_THEME_ID, DEFAULT_TEXT_SIZE_PX, DEFAULT_CORNER_STYLE, "light")
 
 function shouldSyncWindowTheme(
   previous: AppearanceSnapshot,
@@ -127,6 +134,7 @@ export function applyAppearance(overrides: AppearanceOverrides = {}): Appearance
   const next = buildSnapshot(
     overrides.themeId ?? snapshot.themeId,
     overrides.textSizePx ?? snapshot.textSizePx,
+    overrides.cornerStyle ?? snapshot.cornerStyle,
     overrides.systemAppearance ?? getSystemAppearance()
   )
 
@@ -138,9 +146,10 @@ export function applyAppearance(overrides: AppearanceOverrides = {}): Appearance
   root.dataset.theme = next.themeId
   root.dataset.resolvedTheme = next.resolvedThemeId
   root.dataset.appearance = next.resolvedAppearance
+  root.dataset.cornerStyle = next.cornerStyle
   root.classList.toggle("dark", next.resolvedAppearance === "dark")
   root.style.colorScheme = next.resolvedAppearance
-  root.style.setProperty("--radius", "0.625rem")
+  root.style.setProperty("--radius", getCornerStyleRadius(next.cornerStyle))
   root.style.setProperty("--app-text-size", `${next.textSizePx}px`)
 
   for (const [name, value] of Object.entries(next.theme.tokens)) {
@@ -170,11 +179,13 @@ export async function bootstrapAppearance(): Promise<AppearanceSnapshot> {
   const store = await loadDesktopStore(SETTINGS_STORE_FILE)
   const persistedThemeId = await store.get<string>(APPEARANCE_THEME_ID_KEY)
   const persistedTextSizePx = await store.get<number>(APPEARANCE_TEXT_SIZE_KEY)
+  const persistedCornerStyle = await store.get<string>(APPEARANCE_CORNER_STYLE_KEY)
 
   return setAppearanceState(
     {
       themeId: isThemeId(persistedThemeId) ? persistedThemeId : DEFAULT_THEME_ID,
       textSizePx: clampTextSizePx(persistedTextSizePx),
+      cornerStyle: isCornerStyle(persistedCornerStyle) ? persistedCornerStyle : DEFAULT_CORNER_STYLE,
       systemAppearance: getSystemAppearance(),
     },
     { notify: false }
@@ -198,6 +209,10 @@ export function setAppearanceThemeId(themeId: ThemeId): void {
 
 export function setAppearanceTextSizePx(textSizePx: number): void {
   setAppearanceState({ textSizePx })
+}
+
+export function setAppearanceCornerStyle(cornerStyle: CornerStyle): void {
+  setAppearanceState({ cornerStyle })
 }
 
 export function useAppearance(): AppearanceSnapshot {

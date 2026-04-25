@@ -10,6 +10,7 @@ interface UploadChipProps {
   onClick?: () => void
   title?: string
   leadingVisual?: ReactNode
+  surface?: "default" | "user-message"
 }
 
 export function UploadChip({
@@ -19,8 +20,10 @@ export function UploadChip({
   onClick,
   title,
   leadingVisual,
+  surface = "default",
 }: UploadChipProps): ReactElement {
   const Icon = kind === "image" ? FileImage : kind === "pasted_text" ? FileText : File
+  const isUserMessageSurface = surface === "user-message"
 
   return (
     <TagChip
@@ -30,6 +33,24 @@ export function UploadChip({
       onClick={onClick}
       onRemove={onRemove}
       variant="neutral"
+      backgroundClassName={
+        isUserMessageSurface
+          ? "bg-[color:color-mix(in_oklab,var(--color-message-user-bubble-foreground)_10%,transparent)] hover:bg-[color:color-mix(in_oklab,var(--color-message-user-bubble-foreground)_14%,transparent)]"
+          : undefined
+      }
+      borderClassName={
+        isUserMessageSurface
+          ? "border-[color:color-mix(in_oklab,var(--color-message-user-bubble-foreground)_16%,transparent)]"
+          : undefined
+      }
+      textClassName={
+        isUserMessageSurface ? "text-[color:var(--color-message-user-bubble-foreground)]" : undefined
+      }
+      iconClassName={
+        isUserMessageSurface
+          ? "text-[color:color-mix(in_oklab,var(--color-message-user-bubble-foreground)_76%,transparent)]"
+          : undefined
+      }
     />
   )
 }

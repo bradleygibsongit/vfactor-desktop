@@ -105,7 +105,7 @@ export function TabItem({
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       className={cn(
-        "group relative isolate flex h-6 items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-[11px] leading-none cursor-pointer transition-colors",
+        "group relative isolate flex min-h-7 min-w-[5rem] max-w-[13rem] items-center gap-1.5 overflow-hidden rounded-md px-2 py-0.5 text-xs leading-none cursor-pointer transition-colors",
         isActive
           ? "text-sidebar-accent-foreground"
           : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
@@ -118,9 +118,9 @@ export function TabItem({
           transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
         />
       ) : null}
-      <span className="relative z-10 flex items-center gap-1">
+      <span className="relative z-10 flex min-w-0 flex-1 items-center gap-1.5">
         {showHoverClose ? (
-          <span className="relative flex size-3.5 items-center justify-center">
+          <span className="relative flex size-3.5 shrink-0 items-center justify-center">
             <span className="transition-opacity duration-150 group-hover:opacity-0">
               <TabIcon
                 type={type}
@@ -140,15 +140,17 @@ export function TabItem({
             </button>
           </span>
         ) : (
-          <TabIcon
-            type={type}
-            title={title}
-            harnessId={harnessId}
-            activityStatus={activityStatus}
-            hasUnread={hasUnread}
-          />
+          <span className="flex size-3.5 shrink-0 items-center justify-center">
+            <TabIcon
+              type={type}
+              title={title}
+              harnessId={harnessId}
+              activityStatus={activityStatus}
+              hasUnread={hasUnread}
+            />
+          </span>
         )}
-        <span className="truncate max-w-20">{title}</span>
+        <span className="min-w-0 flex-1 truncate">{title}</span>
       </span>
     </div>
   )

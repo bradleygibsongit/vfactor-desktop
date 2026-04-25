@@ -14,7 +14,7 @@ export function FileViewer({ filename, filePath }: FileViewerProps) {
   const [showLoading, setShowLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const language = getLanguageFromFilename(filename)
-  const { monacoThemeId } = useAppearance()
+  const { monacoThemeId, textSizePx } = useAppearance()
 
   useEffect(() => {
     let loadingTimeout: ReturnType<typeof setTimeout> | null = null
@@ -84,7 +84,7 @@ export function FileViewer({ filename, filePath }: FileViewerProps) {
       options={{
         readOnly: true,
         minimap: { enabled: false },
-        fontSize: 13,
+        fontSize: textSizePx,
         lineNumbers: "on",
         scrollBeyondLastLine: false,
         wordWrap: "on",

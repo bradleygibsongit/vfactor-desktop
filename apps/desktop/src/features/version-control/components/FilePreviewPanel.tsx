@@ -22,7 +22,7 @@ function ensureFilePreviewThemeRegistered() {
 
   registerCustomCSSVariableTheme(FILE_PREVIEW_THEME_NAME, {
     foreground: "var(--sidebar-foreground)",
-    background: "var(--sidebar)",
+    background: "var(--right-sidebar-content-bg, var(--background))",
     "token-constant": "var(--sidebar-foreground)",
     "token-string": "var(--color-vcs-added)",
     "token-comment": "var(--muted-foreground)",
@@ -71,7 +71,7 @@ export function FilePreviewPanel({
   const [content, setContent] = useState("")
   const [showLoading, setShowLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { resolvedAppearance } = useAppearance()
+  const { resolvedAppearance, textSizePx } = useAppearance()
 
   const relativePath = useMemo(
     () => getRelativePath(filePath, projectPath),
@@ -141,7 +141,7 @@ export function FilePreviewPanel({
     <div className="flex h-full min-h-0 flex-col">
       <div className="app-scrollbar-sm min-h-0 flex-1 overflow-auto">
         <WorkerPoolContextProvider
-          key={resolvedAppearance}
+          key={`${resolvedAppearance}:${textSizePx}`}
           poolOptions={{
             workerFactory: () => new PierreDiffWorker(),
             poolSize: 1,
@@ -165,41 +165,41 @@ export function FilePreviewPanel({
                 :host {
                   color-scheme: ${resolvedAppearance};
                   --diffs-header-font-family: var(--font-sans);
-                  --diffs-font-size: 12px;
+                  --diffs-font-size: var(--app-text-size, ${textSizePx}px);
                   --diffs-line-height: 1.4;
-                  --bg: var(--sidebar);
+                  --bg: var(--right-sidebar-content-bg, var(--background));
                   --fg: var(--sidebar-foreground);
-                  --diffs-light-bg: var(--sidebar);
-                  --diffs-dark-bg: var(--sidebar);
+                  --diffs-light-bg: var(--right-sidebar-content-bg, var(--background));
+                  --diffs-dark-bg: var(--right-sidebar-content-bg, var(--background));
                   --diffs-light: var(--sidebar-foreground);
                   --diffs-dark: var(--sidebar-foreground);
-                  --diffs-fg-number-override: color-mix(in oklab, var(--sidebar-foreground) 62%, var(--sidebar) 38%);
-                  --diffs-bg-buffer-override: color-mix(in oklab, var(--sidebar) 96%, var(--sidebar-foreground) 4%);
+                  --diffs-fg-number-override: color-mix(in oklab, var(--sidebar-foreground) 62%, var(--right-sidebar-content-bg, var(--background)) 38%);
+                  --diffs-bg-buffer-override: color-mix(in oklab, var(--right-sidebar-content-bg, var(--background)) 96%, var(--sidebar-foreground) 4%);
                   --diffs-bg-hover-override: var(--sidebar-item-hover);
-                  --diffs-bg-context-override: color-mix(in oklab, var(--sidebar) 94%, var(--sidebar-foreground) 6%);
-                  --diffs-bg-context-number-override: color-mix(in oklab, var(--sidebar) 88%, var(--sidebar-foreground) 12%);
-                  --diffs-bg-separator-override: color-mix(in oklab, var(--sidebar) 90%, var(--border) 10%);
+                  --diffs-bg-context-override: color-mix(in oklab, var(--right-sidebar-content-bg, var(--background)) 94%, var(--sidebar-foreground) 6%);
+                  --diffs-bg-context-number-override: color-mix(in oklab, var(--right-sidebar-content-bg, var(--background)) 88%, var(--sidebar-foreground) 12%);
+                  --diffs-bg-separator-override: color-mix(in oklab, var(--right-sidebar-content-bg, var(--background)) 90%, var(--border) 10%);
                 }
 
                 [data-file],
                 [data-diff] {
                   border-radius: 0 !important;
-                  background: var(--sidebar) !important;
+                  background: var(--right-sidebar-content-bg, var(--background)) !important;
                   box-shadow: none !important;
                   border: 0 !important;
                 }
 
                 [data-file] [data-header] {
                   border-bottom-color: color-mix(in oklab, var(--color-border) 80%, transparent) !important;
-                  background: color-mix(in oklab, var(--sidebar) 94%, var(--sidebar-foreground) 6%) !important;
+                  background: color-mix(in oklab, var(--right-sidebar-content-bg, var(--background)) 94%, var(--sidebar-foreground) 6%) !important;
                   padding-inline: 0 !important;
                   min-height: 34px !important;
                 }
 
                 [data-file-info] {
                   color: var(--sidebar-foreground) !important;
-                  background: color-mix(in oklab, var(--sidebar) 94%, var(--sidebar-foreground) 6%) !important;
-                  border-block-color: color-mix(in oklab, var(--sidebar-foreground) 12%, var(--sidebar) 88%) !important;
+                  background: color-mix(in oklab, var(--right-sidebar-content-bg, var(--background)) 94%, var(--sidebar-foreground) 6%) !important;
+                  border-block-color: color-mix(in oklab, var(--sidebar-foreground) 12%, var(--right-sidebar-content-bg, var(--background)) 88%) !important;
                 }
 
                 [data-title],
@@ -217,7 +217,7 @@ export function FilePreviewPanel({
                 [data-separator],
                 [data-content-buffer],
                 [data-gutter-buffer] {
-                  background-color: var(--sidebar) !important;
+                  background-color: var(--right-sidebar-content-bg, var(--background)) !important;
                 }
 
                 [data-code] {

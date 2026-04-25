@@ -127,16 +127,16 @@ const ModelPickerDropdownContent = memo(function ModelPickerDropdownContent({
             aria-label="Show favorite models"
             title="Favorite models"
             className={cn(
-              "group relative isolate flex h-10 w-full items-center justify-center overflow-hidden rounded-md transition-colors",
+              "model-picker-control group relative isolate flex h-10 w-full items-center justify-center overflow-hidden rounded-md transition-colors",
               modelHarnessFilter === "favorites"
-                ? "text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/68 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
+                ? "text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/55 hover:text-accent-foreground"
             )}
           >
             {modelHarnessFilter === "favorites" ? (
               <motion.div
                 layoutId="modelHarnessFilterRail"
-                className="absolute inset-0 z-0 rounded-md bg-[var(--sidebar-item-active)]"
+                className="model-picker-control absolute inset-0 z-0 rounded-md bg-accent"
                 transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
               />
             ) : null}
@@ -153,16 +153,16 @@ const ModelPickerDropdownContent = memo(function ModelPickerDropdownContent({
             aria-label="Show all harnesses"
             title="All harnesses"
             className={cn(
-              "group relative isolate flex h-10 w-full items-center justify-center overflow-hidden rounded-md transition-colors",
+              "model-picker-control group relative isolate flex h-10 w-full items-center justify-center overflow-hidden rounded-md transition-colors",
               modelHarnessFilter === "all"
-                ? "text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/68 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
+                ? "text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/55 hover:text-accent-foreground"
             )}
           >
             {modelHarnessFilter === "all" ? (
               <motion.div
                 layoutId="modelHarnessFilterRail"
-                className="absolute inset-0 z-0 rounded-md bg-[var(--sidebar-item-active)]"
+                className="model-picker-control absolute inset-0 z-0 rounded-md bg-accent"
                 transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
               />
             ) : null}
@@ -182,16 +182,16 @@ const ModelPickerDropdownContent = memo(function ModelPickerDropdownContent({
               aria-label={group.label}
               title={group.label}
               className={cn(
-                "group relative isolate flex h-10 w-full items-center justify-center overflow-hidden rounded-md transition-colors",
+                "model-picker-control group relative isolate flex h-10 w-full items-center justify-center overflow-hidden rounded-md transition-colors",
                 modelHarnessFilter === group.harnessId
-                  ? "text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/68 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
+                  ? "text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent/55 hover:text-accent-foreground"
               )}
             >
               {modelHarnessFilter === group.harnessId ? (
                 <motion.div
                   layoutId="modelHarnessFilterRail"
-                  className="absolute inset-0 z-0 rounded-md bg-[var(--sidebar-item-active)]"
+                  className="model-picker-control absolute inset-0 z-0 rounded-md bg-accent"
                   transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
                 />
               ) : null}
@@ -218,7 +218,7 @@ const ModelPickerDropdownContent = memo(function ModelPickerDropdownContent({
             />
           </InputGroup>
           {!canSwitchHarnessForModelSelection ? (
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               This chat is locked to {getHarnessGroupMeta(selectedHarnessId).label}. Start a new chat to switch harnesses.
             </p>
           ) : null}
@@ -236,11 +236,11 @@ const ModelPickerDropdownContent = memo(function ModelPickerDropdownContent({
                   <div
                     key={entry.key}
                     className={cn(
-                      "flex h-7 items-center gap-1 rounded-md px-1 text-left transition-colors",
+                      "model-picker-row flex h-7 items-center gap-1 rounded-md px-1 text-left transition-colors",
                       isSelected
                         ? "bg-accent text-accent-foreground"
-                        : "hover:bg-[var(--sidebar-item-hover)]",
-                      entry.disabled && "opacity-50"
+                        : "hover:bg-accent/55 hover:text-accent-foreground",
+                      entry.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-inherit"
                     )}
                   >
                     <button
@@ -259,7 +259,12 @@ const ModelPickerDropdownContent = memo(function ModelPickerDropdownContent({
                           ? "Remove from favorites"
                           : "Add to favorites"
                       }
-                      className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+                      className={cn(
+                        "model-picker-icon-button flex size-6 shrink-0 items-center justify-center rounded-sm transition-colors",
+                        isSelected
+                          ? "text-accent-foreground/78 hover:text-accent-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
                     >
                       <Heart
                         className="size-3.5"
@@ -270,7 +275,7 @@ const ModelPickerDropdownContent = memo(function ModelPickerDropdownContent({
                       type="button"
                       disabled={entry.disabled}
                       onClick={() => onSelectModel(entry.harnessId, entry.model.id)}
-                      className="flex min-w-0 flex-1 items-center gap-2"
+                      className="flex min-w-0 flex-1 items-center gap-2 disabled:cursor-not-allowed"
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-2">
                         {modelHarnessFilter === "all" || modelHarnessFilter === "favorites" ? (
@@ -279,15 +284,18 @@ const ModelPickerDropdownContent = memo(function ModelPickerDropdownContent({
                             className="size-3.5 shrink-0"
                           />
                         ) : null}
-                        <span className="truncate text-[13px] font-medium leading-5">
+                        <span className="truncate text-sm font-medium leading-5">
                           {entry.label}
                         </span>
-                        <span className="shrink-0 text-[11px] leading-4 text-muted-foreground">
+                        <span className={cn(
+                          "shrink-0 text-xs leading-4",
+                          isSelected ? "text-accent-foreground/78" : "text-muted-foreground"
+                        )}>
                           {entry.subtitle}
                         </span>
                       </span>
                       {isSelected ? (
-                        <CheckCircle className="size-3 shrink-0 text-muted-foreground" />
+                        <CheckCircle className="size-3 shrink-0 text-accent-foreground/78" />
                       ) : null}
                     </button>
                   </div>
@@ -330,7 +338,7 @@ export const ModelPicker = memo(function ModelPicker({
   return (
     <DropdownMenu open={isOpen} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
-        className="inline-flex h-7 items-center gap-2 px-1 text-sm text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
+        className="model-picker-trigger inline-flex h-7 items-center gap-2 rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
         aria-label={selectedModelLabel}
         title={selectedModelLabel}
       >
@@ -344,7 +352,7 @@ export const ModelPicker = memo(function ModelPicker({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="h-[min(24rem,calc(100vh-1rem))] w-[min(30rem,calc(100vw-1rem))] overflow-hidden rounded-xl p-0"
+        className="model-picker-surface h-[min(24rem,calc(100vh-1rem))] w-[min(30rem,calc(100vw-1rem))] overflow-hidden rounded-xl p-0"
       >
         <ModelPickerDropdownContent {...contentProps} />
       </DropdownMenuContent>

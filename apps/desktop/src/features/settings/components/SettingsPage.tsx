@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ChevronDownIcon } from "@/components/icons"
+import { cn } from "@/lib/utils"
 import { Button } from "@/features/shared/components/ui/button"
 import {
   Collapsible,
@@ -29,6 +30,8 @@ import { useModels } from "@/features/chat/hooks/useModels"
 import { getRuntimeModelLabel } from "@/features/chat/domain/runtimeModels"
 import type { HarnessId, RuntimeModel } from "@/features/chat/types"
 import {
+  CORNER_STYLE_OPTIONS,
+  DEFAULT_CORNER_STYLE,
   DEFAULT_TEXT_SIZE_PX,
   DEFAULT_THEME_ID,
   MAX_TEXT_SIZE_PX,
@@ -288,6 +291,7 @@ function GitSettingsSection() {
 function AppearanceSettingsSection() {
   const appearanceThemeId = useSettingsStore((state) => state.appearanceThemeId)
   const appearanceTextSizePx = useSettingsStore((state) => state.appearanceTextSizePx)
+  const appearanceCornerStyle = useSettingsStore((state) => state.appearanceCornerStyle)
   const terminalLinkTarget = useSettingsStore((state) => state.terminalLinkTarget)
   const hasLoaded = useSettingsStore((state) => state.hasLoaded)
   const initialize = useSettingsStore((state) => state.initialize)
@@ -295,6 +299,8 @@ function AppearanceSettingsSection() {
   const resetAppearanceThemeId = useSettingsStore((state) => state.resetAppearanceThemeId)
   const setAppearanceTextSizePx = useSettingsStore((state) => state.setAppearanceTextSizePx)
   const resetAppearanceTextSizePx = useSettingsStore((state) => state.resetAppearanceTextSizePx)
+  const setAppearanceCornerStyle = useSettingsStore((state) => state.setAppearanceCornerStyle)
+  const resetAppearanceCornerStyle = useSettingsStore((state) => state.resetAppearanceCornerStyle)
   const setTerminalLinkTarget = useSettingsStore((state) => state.setTerminalLinkTarget)
   const resetTerminalLinkTarget = useSettingsStore((state) => state.resetTerminalLinkTarget)
   const { resolvedAppearance, resolvedThemeId, monacoThemeId, pierreDiffTheme } = useAppearance()
@@ -383,6 +389,44 @@ function AppearanceSettingsSection() {
           </Field>
 
           <Field>
+            <FieldTitle>Corner style</FieldTitle>
+            <FieldDescription>
+              Adjusts the shared radius scale used by chat, menus, panels, and controls.
+            </FieldDescription>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {CORNER_STYLE_OPTIONS.map((option) => {
+                const isSelected = appearanceCornerStyle === option.id
+
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={isSettingsLoading}
+                    aria-pressed={isSelected}
+                    onClick={() => setAppearanceCornerStyle(option.id)}
+                    className={cn(
+                      "flex min-w-[8rem] flex-1 cursor-pointer flex-col gap-1 rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none",
+                      isSelected
+                        ? "border-primary/45 bg-accent text-accent-foreground"
+                        : "border-border/70 bg-background/45 text-foreground hover:bg-accent/45 hover:text-accent-foreground"
+                    )}
+                  >
+                    <span className="text-sm font-medium">{option.label}</span>
+                    <span
+                      className={cn(
+                        "text-xs leading-4",
+                        isSelected ? "text-accent-foreground/72" : "text-muted-foreground"
+                      )}
+                    >
+                      {option.description}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </Field>
+
+          <Field>
             <FieldTitle>Theme adapters</FieldTitle>
             <FieldDescription>
               Monaco and the PR patch viewer switch with appearance changes while the terminal continues reading CSS variables from the active theme.
@@ -425,6 +469,9 @@ function AppearanceSettingsSection() {
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={resetAppearanceTextSizePx} disabled={isSettingsLoading || appearanceTextSizePx === DEFAULT_TEXT_SIZE_PX}>
             Reset text size
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={resetAppearanceCornerStyle} disabled={isSettingsLoading || appearanceCornerStyle === DEFAULT_CORNER_STYLE}>
+            Reset corners
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={resetAppearanceThemeId} disabled={isSettingsLoading || appearanceThemeId === DEFAULT_THEME_ID}>
             Reset theme

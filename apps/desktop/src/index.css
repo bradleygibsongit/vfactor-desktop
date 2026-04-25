@@ -108,6 +108,7 @@
     --color-cta-foreground: var(--cta-foreground);
     --color-toggle-on: var(--toggle-on);
     --color-input: var(--input);
+    --color-control-border: var(--control-border);
     --color-border: var(--border);
     --color-destructive-border: var(--destructive-border);
     --color-destructive-surface-foreground: var(--destructive-surface-foreground);
@@ -116,6 +117,14 @@
     --color-destructive: var(--destructive);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
+    --color-icon-muted: var(--icon-muted);
+    --color-icon-subtle: var(--icon-subtle);
+    --color-icon: var(--icon);
+    --color-icon-strong: var(--icon-strong);
+    --color-content-muted: var(--content-muted);
+    --color-content-subtle: var(--content-subtle);
+    --color-content: var(--content);
+    --color-content-strong: var(--content-strong);
     --color-muted-foreground: var(--muted-foreground);
     --color-muted: var(--muted);
     --color-secondary-foreground: var(--secondary-foreground);
@@ -134,8 +143,8 @@
     --text-sm--line-height: 1.25rem;
     --text-base: var(--app-text-size);
     --text-base--line-height: 1.4rem;
-    --radius-sm: calc(var(--radius) - 4px);
-    --radius-md: calc(var(--radius) - 2px);
+    --radius-sm: max(calc(var(--radius) - 4px), 0px);
+    --radius-md: max(calc(var(--radius) - 2px), 0px);
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) + 4px);
     --radius-2xl: calc(var(--radius) + 8px);
@@ -165,6 +174,9 @@
   body {
     @apply font-sans bg-background text-foreground overscroll-none;
     }
+  :where(button, summary, [role="button"], [role="menuitem"], [role="option"], [data-slot="button"], [data-slot="dropdown-menu-trigger"], [data-slot="select-trigger"]):where(:not(:disabled, [disabled], [aria-disabled="true"], [data-disabled], [data-disabled="true"])) {
+    cursor: pointer;
+  }
   html {
     @apply font-sans bg-background overscroll-none;
     }
@@ -222,6 +234,83 @@
       0 22px 54px color-mix(in oklab, black 10%, transparent);
   }
 
+  html[data-resolved-theme="ayu"] .chat-composer-shell {
+    background-color: color-mix(in oklab, var(--background) 91%, var(--primary));
+    border-color: color-mix(in oklab, var(--primary) 20%, var(--border));
+    box-shadow:
+      0 1px 0 color-mix(in oklab, var(--primary) 10%, transparent) inset,
+      0 22px 54px color-mix(in oklab, black 18%, transparent);
+  }
+
+  .chat-composer-input-surface {
+    border-radius: var(--radius-2xl);
+  }
+
+  .chat-user-message-bubble,
+  .is-user .chat-message-content {
+    border-radius: var(--radius-xl);
+  }
+
+  .model-picker-surface {
+    border-radius: var(--radius-xl);
+  }
+
+  .searchable-select-surface {
+    border-radius: var(--radius-xl);
+  }
+
+  .model-picker-trigger,
+  .model-picker-control,
+  .model-picker-row,
+  .searchable-select-trigger,
+  .searchable-select-input,
+  .searchable-select-row {
+    border-radius: var(--radius-md);
+  }
+
+  .model-picker-icon-button {
+    border-radius: var(--radius-sm);
+  }
+
+  .app-modal-surface {
+    border: 1px solid color-mix(in oklab, var(--border) 84%, transparent);
+    border-radius: var(--radius-xl);
+    box-shadow:
+      0 1px 0 color-mix(in oklab, var(--foreground) 6%, transparent) inset,
+      0 18px 54px color-mix(in oklab, black 16%, transparent);
+  }
+
+  .app-modal-divider {
+    border-color: color-mix(in oklab, var(--border) 72%, transparent);
+  }
+
+  html[data-appearance="light"] .app-modal-surface {
+    border-color: color-mix(in oklab, var(--border) 92%, transparent);
+    box-shadow:
+      0 1px 0 color-mix(in oklab, white 82%, transparent) inset,
+      0 18px 54px color-mix(in oklab, black 10%, transparent);
+  }
+
+  html[data-corner-style="square"] .chat-composer-input-surface,
+  html[data-corner-style="square"] .chat-user-message-bubble,
+  html[data-corner-style="square"] .is-user .chat-message-content {
+    border-radius: 0 !important;
+  }
+
+  html[data-corner-style="square"] .chat-composer-send-button,
+  html[data-corner-style="square"] .model-picker-surface,
+  html[data-corner-style="square"] .model-picker-trigger,
+  html[data-corner-style="square"] .model-picker-control,
+  html[data-corner-style="square"] .model-picker-row,
+  html[data-corner-style="square"] .model-picker-icon-button,
+  html[data-corner-style="square"] .searchable-select-surface,
+  html[data-corner-style="square"] .searchable-select-trigger,
+  html[data-corner-style="square"] .searchable-select-input,
+  html[data-corner-style="square"] .searchable-select-row,
+  html[data-corner-style="square"] .app-modal-surface {
+    border-radius: 0 !important;
+  }
+
   .chat-composer-queue-deck {
     background-color: color-mix(in oklab, var(--popover) 82%, var(--card));
     border-color: color-mix(in oklab, var(--border) 52%, transparent);
@@ -265,7 +354,28 @@
   }
 
   .chat-main-surface {
-    background-color: color-mix(in oklab, var(--sidebar) 58%, var(--main-content));
+    --chat-main-surface-bg: color-mix(in oklab, var(--sidebar) 58%, var(--main-content));
+    background-color: var(--chat-main-surface-bg);
+  }
+
+  .chat-top-fade {
+    background: linear-gradient(
+      to bottom,
+      var(--chat-main-surface-bg) 0%,
+      color-mix(in oklab, var(--chat-main-surface-bg) 78%, transparent) 52%,
+      transparent 100%
+    );
+    box-shadow: 0 14px 22px -20px color-mix(in oklab, black 54%, transparent);
+  }
+
+  .chat-bottom-fade {
+    background: linear-gradient(
+      to top,
+      var(--chat-main-surface-bg) 0%,
+      color-mix(in oklab, var(--chat-main-surface-bg) 78%, transparent) 52%,
+      transparent 100%
+    );
+    box-shadow: 0 -14px 22px -20px color-mix(in oklab, black 54%, transparent);
   }
 
   .sidebar-resize-transition {
@@ -279,7 +389,27 @@
   }
 
   html[data-appearance="light"] .chat-main-surface {
-    background-color: color-mix(in oklab, var(--sidebar) 48%, var(--main-content));
+    --chat-main-surface-bg: color-mix(in oklab, var(--sidebar) 48%, var(--main-content));
+  }
+
+  html[data-appearance="light"] .chat-top-fade {
+    background: linear-gradient(
+      to bottom,
+      var(--chat-main-surface-bg) 0%,
+      color-mix(in oklab, var(--chat-main-surface-bg) 86%, transparent) 42%,
+      transparent 100%
+    );
+    box-shadow: none;
+  }
+
+  html[data-appearance="light"] .chat-bottom-fade {
+    background: linear-gradient(
+      to top,
+      var(--chat-main-surface-bg) 0%,
+      color-mix(in oklab, var(--chat-main-surface-bg) 86%, transparent) 42%,
+      transparent 100%
+    );
+    box-shadow: none;
   }
 
   .app-scrollbar {

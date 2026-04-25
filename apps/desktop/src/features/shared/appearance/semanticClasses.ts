@@ -15,6 +15,20 @@ export function feedbackIconClassName(tone: FeedbackTone): string {
   return `text-[color:var(--color-${tone})]`
 }
 
+export const contentTextClassNames = {
+  strong: "text-[color:var(--color-content-strong)]",
+  default: "text-[color:var(--color-content)]",
+  subtle: "text-[color:var(--color-content-subtle)]",
+  muted: "text-[color:var(--color-content-muted)]",
+} as const
+
+export const iconTextClassNames = {
+  strong: "text-[color:var(--color-icon-strong)]",
+  default: "text-[color:var(--color-icon)]",
+  subtle: "text-[color:var(--color-icon-subtle)]",
+  muted: "text-[color:var(--color-icon-muted)]",
+} as const
+
 export const vcsTextClassNames = {
   added: "text-[color:var(--color-vcs-added)]",
   modified: "text-[color:var(--color-vcs-modified)]",

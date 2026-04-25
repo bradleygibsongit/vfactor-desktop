@@ -79,6 +79,18 @@ const MARKDOWN_COMPONENTS = {
   a: MarkdownLink,
 };
 
+const ASSISTANT_MARKDOWN_COMPONENTS = {
+  ...MARKDOWN_COMPONENTS,
+  p: ({ children, className, ...props }: ComponentProps<"p">) => (
+    <p
+      className={cn("my-0 leading-[1.86] [&:not(:first-child)]:mt-4", className)}
+      {...props}
+    >
+      {children}
+    </p>
+  ),
+};
+
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
 };
@@ -104,8 +116,8 @@ export const MessageContent = ({
 }: MessageContentProps) => (
   <div
     className={cn(
-      "flex w-full min-w-0 flex-col gap-4 overflow-hidden text-sm text-foreground",
-      "group-[.is-user]:w-auto group-[.is-user]:max-w-[min(42rem,78%)] group-[.is-user]:self-end group-[.is-user]:gap-0 group-[.is-user]:rounded-[14px] group-[.is-user]:bg-[color:var(--color-message-user-bubble)] group-[.is-user]:px-3 group-[.is-user]:py-2 group-[.is-user]:text-sm group-[.is-user]:leading-6 group-[.is-user]:text-[color:var(--color-message-user-bubble-foreground)]",
+      "chat-message-content flex w-full min-w-0 flex-col gap-4 overflow-hidden text-sm text-foreground",
+      "group-[.is-user]:chat-user-message-bubble group-[.is-user]:w-auto group-[.is-user]:max-w-[min(42rem,78%)] group-[.is-user]:self-end group-[.is-user]:gap-0 group-[.is-user]:bg-[color:var(--color-message-user-bubble)] group-[.is-user]:px-3 group-[.is-user]:py-2 group-[.is-user]:text-sm group-[.is-user]:leading-6 group-[.is-user]:text-[color:var(--color-message-user-bubble-foreground)]",
       className
     )}
     {...props}
@@ -370,9 +382,9 @@ export const MessageResponse = memo(
   ({ className, isStreaming, ...props }: MessageResponseProps) => (
     <Streamdown
       mode={isStreaming ? "streaming" : "static"}
-      components={MARKDOWN_COMPONENTS}
+      components={ASSISTANT_MARKDOWN_COMPONENTS}
       className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_li]:leading-[1.86]",
         className
       )}
       {...props}

@@ -115,12 +115,12 @@ function ChangesPanelDiff({
 }: {
   diff: GitFileDiff | null
 }) {
-  const { pierreDiffTheme } = useAppearance()
+  const { pierreDiffTheme, textSizePx } = useAppearance()
   const patch = useMemo(() => getRenderablePatch(diff), [diff])
 
   if (!diff) {
     return (
-      <div className="px-6 py-4 text-[12px] text-muted-foreground">
+      <div className="px-6 py-4 text-sm text-muted-foreground">
         Loading diff...
       </div>
     )
@@ -128,7 +128,7 @@ function ChangesPanelDiff({
 
   if (!patch) {
     return (
-      <div className="px-6 py-4 text-[12px] text-muted-foreground">
+      <div className="px-6 py-4 text-sm text-muted-foreground">
         Diff not available for this file.
       </div>
     )
@@ -153,12 +153,12 @@ function ChangesPanelDiff({
             [data-code] {
               padding-top: 4px !important;
               padding-bottom: 4px !important;
-              font-size: 12px !important;
+              font-size: var(--app-text-size, ${textSizePx}px) !important;
               line-height: 1.45 !important;
             }
           `,
         }}
-        className="text-[12px]"
+        className="text-base"
       />
     </div>
   )

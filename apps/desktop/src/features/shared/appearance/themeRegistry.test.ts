@@ -101,6 +101,7 @@ describe("themeRegistry", () => {
     }> = [
       { first: "border", second: "background", minimumContrast: 1.3 },
       { first: "border", second: "card", minimumContrast: 1.2 },
+      { first: "control-border", second: "background", minimumContrast: 1.16 },
       { first: "input", second: "background", minimumContrast: 1.14 },
       { first: "sidebar-item-active", second: "sidebar", minimumContrast: 1.16 },
       { first: "sidebar-item-hover", second: "sidebar", minimumContrast: 1.1 },
@@ -117,6 +118,35 @@ describe("themeRegistry", () => {
         ).toBeGreaterThanOrEqual(expectation.minimumContrast)
       }
     }
+  })
+
+  test("user message bubbles follow each theme's accent tokens", () => {
+    for (const theme of CONCRETE_THEMES) {
+      expect(theme.tokens["message-user-bubble"], `${theme.id} user bubble background`).toBe(
+        theme.tokens.accent
+      )
+      expect(
+        theme.tokens["message-user-bubble-foreground"],
+        `${theme.id} user bubble foreground`
+      ).toBe(theme.tokens["accent-foreground"])
+    }
+  })
+
+  test("includes the imported theme set exposed in the command menu", () => {
+    expect(CONCRETE_THEMES.map((theme) => theme.id)).toEqual(
+      expect.arrayContaining([
+        "tokyonight",
+        "everforest",
+        "ayu",
+        "catppuccin",
+        "catppuccin-macchiato",
+        "gruvbox",
+        "kanagawa",
+        "nord",
+        "matrix",
+        "night-owl",
+      ])
+    )
   })
 
   test("system defaults map to the nucleus light and dark pair", () => {

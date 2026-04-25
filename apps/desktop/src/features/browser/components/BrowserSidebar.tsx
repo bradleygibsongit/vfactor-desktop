@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { CaretLeft, CaretRight, Globe, Refresh } from "@/components/icons"
+import { createPortal } from "react-dom"
+import { ArrowSquareOut, CaretLeft, CaretRight, Globe, Refresh } from "@/components/icons"
+import { desktop } from "@/desktop/client"
 import { RightSidebarEmptyState } from "@/features/shared/components/layout/RightSidebarEmptyState"
 import { Button } from "@/features/shared/components/ui/button"
 import {
@@ -72,7 +74,26 @@ function resolveBrowserDestination(value: string): string | null {
   }
 }
 
-export function BrowserSidebar() {
+function resolveExternalBrowserUrl(value: string): string | null {
+  const destination = resolveBrowserDestination(value)
+
+  if (!destination || destination === "about:blank") {
+    return null
+  }
+
+  try {
+    const parsed = new URL(destination)
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : null
+  } catch {
+    return null
+  }
+}
+
+interface BrowserSidebarProps {
+  toolbarContainer?: HTMLElement | null
+}
+
+export function BrowserSidebar({ toolbarContainer }: BrowserSidebarProps) {
   const { selectedWorktreeId } = useCurrentProjectWorktree()
   const worktreeId = selectedWorktreeId ?? null
   const browserUrl = useBrowserSidebarStore((state) =>
@@ -209,66 +230,110 @@ export function BrowserSidebar() {
     event.preventDefault()
     navigate(addressValue)
   }
+  const externalBrowserUrl = resolveExternalBrowserUrl(addressValue || browserUrl || "")
+
+  const handleOpenExternal = async () => {
+    if (!externalBrowserUrl) {
+      return
+    }
+
+    try {
+      await desktop.shell.openExternal(externalBrowserUrl)
+    } catch (error) {
+      console.error("[BrowserSidebar] Failed to open URL externally:", error)
+      setLoadError("Unable to open this page in your default browser.")
+    }
+  }
+
+  const browserToolbarButtonClassName =
+    "size-8 border-sidebar-border bg-background text-foreground shadow-none hover:bg-[var(--sidebar-item-hover)] hover:text-foreground disabled:border-sidebar-border/80 disabled:bg-background disabled:text-foreground/72 disabled:opacity-100"
+  const browserAddressButtonClassName =
+    "text-foreground hover:bg-[var(--sidebar-item-hover)] hover:text-foreground disabled:text-foreground/68 disabled:opacity-100"
+
+  const toolbar = (
+    <form
+      onSubmit={handleSubmit}
+      className={toolbarContainer ? "h-8 min-w-0 flex-1" : "min-w-0 shrink-0 px-3"}
+    >
+      <div className="flex h-8 min-w-0 items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className={browserToolbarButtonClassName}
+          onClick={() => (webviewRef.current as BrowserWebviewElement | null)?.goBack()}
+          disabled={!isWebviewReady || !canGoBack}
+          aria-label="Go back"
+        >
+          <CaretLeft size={14} />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className={browserToolbarButtonClassName}
+          onClick={() => (webviewRef.current as BrowserWebviewElement | null)?.goForward()}
+          disabled={!isWebviewReady || !canGoForward}
+          aria-label="Go forward"
+        >
+          <CaretRight size={14} />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className={browserToolbarButtonClassName}
+          onClick={() => (webviewRef.current as BrowserWebviewElement | null)?.reload()}
+          disabled={!isWebviewReady}
+          aria-label="Refresh page"
+        >
+          <Refresh size={14} className={isLoading ? "animate-spin" : undefined} />
+        </Button>
+        <InputGroup className="h-8 min-w-0 flex-1 rounded-md border-sidebar-border bg-background text-foreground shadow-[inset_0_1px_0_color-mix(in_oklab,var(--foreground)_5%,transparent)]">
+          <InputGroupAddon align="inline-start" className="py-0 pl-2 pr-0 text-foreground">
+            <InputGroupText className="text-foreground [&_svg:not([class*='size-'])]:size-3.5">
+              <Globe size={14} />
+            </InputGroupText>
+          </InputGroupAddon>
+          <InputGroupInput
+            className="h-8 px-1.5 py-0 text-sm text-foreground placeholder:text-foreground/62"
+            value={addressValue}
+            onChange={(event) => setAddressValue(event.target.value)}
+            placeholder="Enter a URL or search the web"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <InputGroupAddon align="inline-end" className="gap-0.5 py-0 pr-1">
+            <InputGroupButton
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Open in default browser"
+              disabled={!externalBrowserUrl}
+              onClick={() => void handleOpenExternal()}
+              className={browserAddressButtonClassName}
+            >
+              <ArrowSquareOut size={14} />
+            </InputGroupButton>
+            <InputGroupButton
+              type="submit"
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Go to address"
+              className={browserAddressButtonClassName}
+            >
+              <CaretRight size={14} />
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+      </div>
+    </form>
+  )
 
   return (
     <div className="flex h-full min-h-0 min-w-0 w-full flex-col">
-      <form onSubmit={handleSubmit} className="min-w-0 shrink-0 px-1.5">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="text-sidebar-foreground/64 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
-            onClick={() => (webviewRef.current as BrowserWebviewElement | null)?.goBack()}
-            disabled={!isWebviewReady || !canGoBack}
-            aria-label="Go back"
-          >
-            <CaretLeft size={14} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="text-sidebar-foreground/64 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
-            onClick={() => (webviewRef.current as BrowserWebviewElement | null)?.goForward()}
-            disabled={!isWebviewReady || !canGoForward}
-            aria-label="Go forward"
-          >
-            <CaretRight size={14} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="text-sidebar-foreground/64 hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground"
-            onClick={() => (webviewRef.current as BrowserWebviewElement | null)?.reload()}
-            disabled={!isWebviewReady}
-            aria-label="Refresh page"
-          >
-            <Refresh size={14} className={isLoading ? "animate-spin" : undefined} />
-          </Button>
-          <InputGroup className="h-8 min-w-0 flex-1 bg-background/70">
-            <InputGroupAddon align="inline-start" className="pl-2 pr-0 text-sidebar-foreground/42">
-              <InputGroupText>
-                <Globe size={14} />
-              </InputGroupText>
-            </InputGroupAddon>
-            <InputGroupInput
-              value={addressValue}
-              onChange={(event) => setAddressValue(event.target.value)}
-              placeholder="Enter a URL or search the web"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-            <InputGroupAddon align="inline-end" className="pr-1">
-              <InputGroupButton type="submit" size="icon-xs" variant="ghost" aria-label="Go to address">
-                <CaretRight size={14} />
-              </InputGroupButton>
-            </InputGroupAddon>
-          </InputGroup>
-        </div>
-      </form>
+      {toolbarContainer ? createPortal(toolbar, toolbarContainer) : toolbar}
 
       {loadError ? (
         <div className="mx-1.5 mt-1.5 shrink-0 rounded-xl border border-destructive/20 bg-destructive/5 px-2.5 py-2 text-xs leading-5 text-destructive">
@@ -277,7 +342,7 @@ export function BrowserSidebar() {
       ) : null}
 
       {browserUrl ? (
-        <div className="mt-1.5 min-h-0 min-w-0 flex-1 overflow-hidden border-t border-sidebar-border/70 bg-background shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden border-t border-sidebar-border/70 bg-background shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <webview
             ref={webviewRef}
             src={browserUrl}
@@ -286,7 +351,7 @@ export function BrowserSidebar() {
           />
         </div>
       ) : (
-        <div className="mt-1.5 flex min-h-0 min-w-0 flex-1 border-t border-sidebar-border/70 bg-background">
+        <div className="flex min-h-0 min-w-0 flex-1 border-t border-sidebar-border/70 bg-background">
           <RightSidebarEmptyState
             title="Open a page"
             description="Enter a URL above to load a site in the browser panel."

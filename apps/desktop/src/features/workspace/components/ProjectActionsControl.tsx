@@ -8,7 +8,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/features/shared/components/ui/dropdown-menu"
@@ -155,7 +154,7 @@ export function ProjectActionsControl() {
           onClick={openCreateModal}
           size="sm"
           variant="outline"
-          className="h-7 border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] px-2 text-foreground shadow-none hover:bg-[var(--sidebar-item-hover)]"
+          className="h-7 border-control-border bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] px-2 text-foreground shadow-none hover:bg-[var(--sidebar-item-hover)]"
         >
           <Plus size={14} className="text-muted-foreground" />
           <span>Add action</span>
@@ -170,7 +169,7 @@ export function ProjectActionsControl() {
             onClick={() => void runAction(primaryAction)}
             disabled={runningActionId === primaryAction.id}
             className={cn(
-              "h-7 max-w-[172px] min-w-0 justify-start rounded-r-none border-r-0 border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
+              "h-7 max-w-[172px] min-w-0 justify-start rounded-r-none border-r-0 border-control-border bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]",
               runningActionId === primaryAction.id && "cursor-wait",
             )}
             variant="outline"
@@ -186,7 +185,7 @@ export function ProjectActionsControl() {
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  className="h-7 w-8 rounded-l-none border-sidebar-border/90 bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]"
+                  className="h-7 w-8 rounded-l-none border-control-border bg-[color:color-mix(in_oklab,var(--sidebar)_74%,var(--card))] shadow-none hover:bg-[var(--sidebar-item-hover)]"
                   aria-label="Open project actions menu"
                   disabled={runningActionId != null}
                 />
@@ -198,7 +197,7 @@ export function ProjectActionsControl() {
               ref={actionMenuRef}
               align="end"
               sideOffset={8}
-              className="w-44 border border-border/70 bg-card p-0.5 shadow-lg"
+              className="w-44 border border-sidebar-border bg-sidebar p-0.5 text-sidebar-foreground shadow-lg"
             >
               {actions.map((action) => (
                 <DropdownMenuItem
@@ -207,7 +206,7 @@ export function ProjectActionsControl() {
                     setIsMenuOpen(false)
                     void runAction(action, true)
                   }}
-                  className="group/action-item min-h-7 gap-1.5 px-1.5 py-0.5"
+                  className="group/action-item min-h-7 gap-1.5 px-1.5 py-0.5 focus:bg-[var(--sidebar-item-hover)] focus:text-sidebar-foreground focus:**:text-sidebar-foreground"
                 >
                   <ProjectActionIcon action={action} size={16} className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate font-medium">{action.name}</span>
@@ -219,7 +218,7 @@ export function ProjectActionsControl() {
                   <button
                     type="button"
                     aria-label={`Edit ${action.name}`}
-                    className="hidden size-5 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent group-hover/action-item:flex"
+                    className="hidden size-5 items-center justify-center rounded-md text-muted-foreground transition hover:bg-[var(--sidebar-item-hover)] hover:text-sidebar-foreground group-hover/action-item:flex"
                     onMouseDown={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
@@ -234,13 +233,12 @@ export function ProjectActionsControl() {
                   </button>
                 </DropdownMenuItem>
               ))}
-              <DropdownMenuSeparator className="my-1" />
               <DropdownMenuItem
                 onClick={() => {
                   setIsMenuOpen(false)
                   openCreateModal()
                 }}
-                className="min-h-7 gap-1.5 px-1.5 py-0.5 font-medium"
+                className="min-h-7 gap-1.5 px-1.5 py-0.5 font-medium focus:bg-[var(--sidebar-item-hover)] focus:text-sidebar-foreground focus:**:text-sidebar-foreground"
               >
                 <Plus size={14} className="text-muted-foreground" />
                 <span>Add action</span>

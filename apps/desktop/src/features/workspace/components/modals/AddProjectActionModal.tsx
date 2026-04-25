@@ -49,7 +49,7 @@ interface AddProjectActionModalProps {
 }
 
 const iconTriggerClassName =
-  "flex size-11 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/20 text-muted-foreground transition-colors hover:border-border hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted/30 aria-expanded:text-foreground"
+  "flex size-11 shrink-0 items-center justify-center rounded-lg border border-control-border bg-input/45 text-[color:var(--color-icon-subtle)] transition-colors hover:border-border hover:bg-input/65 hover:text-[color:var(--color-icon-strong)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-input/65 aria-expanded:text-[color:var(--color-icon-strong)]"
 
 const iconPickerItemClassName =
   "flex aspect-square w-full items-center justify-center rounded-md border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -171,7 +171,7 @@ export function AddProjectActionModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-xl">
-        <DialogHeader className="border-b border-border/60 px-5 py-4 pr-12">
+        <DialogHeader className="app-modal-divider border-b px-5 py-4 pr-12">
           <DialogTitle className="text-2xl font-semibold tracking-tight">
             {action ? "Edit Action" : "Add Action"}
           </DialogTitle>
@@ -244,7 +244,7 @@ export function AddProjectActionModal({
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Run tests"
                 autoFocus
-                className="h-11 border-border/70 bg-muted/20 hover:border-border focus-visible:bg-card"
+                className="h-11 border-control-border bg-input/45 hover:border-border focus-visible:bg-card"
               />
             </div>
           </div>
@@ -258,7 +258,7 @@ export function AddProjectActionModal({
               onChange={() => undefined}
               placeholder="Press shortcut"
               aria-invalid={Boolean(hotkeyError)}
-              className="h-11 border-border/70 bg-muted/20 hover:border-border focus-visible:bg-card"
+              className="h-11 border-control-border bg-input/45 hover:border-border focus-visible:bg-card"
             />
             <p className={cn("text-sm", hotkeyError ? "text-destructive" : "text-muted-foreground")}>
               {hotkeyError ?? "Press a shortcut. Use Backspace to clear."}
@@ -272,7 +272,7 @@ export function AddProjectActionModal({
               value={command}
               onChange={(event) => setCommand(event.target.value)}
               placeholder={"bun test\nbun run lint"}
-              className="min-h-32 resize-y border-border/70 bg-muted/20 font-mono text-sm hover:border-border focus-visible:bg-card"
+              className="min-h-32 resize-y border-control-border bg-input/45 font-mono text-sm hover:border-border focus-visible:bg-card"
             />
             <p className="text-sm text-muted-foreground">
               Actions run sequentially. Each non-empty line is sent to the terminal as its own command.
@@ -280,7 +280,7 @@ export function AddProjectActionModal({
           </div>
         </DialogBody>
 
-        <DialogFooter className="mx-0 mb-0 rounded-none border-border/60 bg-card px-5 py-3">
+        <DialogFooter className="app-modal-divider mx-0 mb-0 rounded-none bg-card px-5 py-3">
           {action ? (
             <Button
               type="button"
