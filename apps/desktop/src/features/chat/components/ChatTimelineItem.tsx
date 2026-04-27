@@ -565,6 +565,7 @@ type ReadableCommandSummary = {
 
 function getReadableCommandSummary(input: Record<string, unknown>): ReadableCommandSummary | null {
   const readAction = getCommandActions(input).find((action) => action.type === "read")
+  const searchAction = getCommandActions(input).find((action) => action.type === "search")
   const command = typeof input.command === "string" ? input.command : ""
 
   if (readAction) {
@@ -580,6 +581,19 @@ function getReadableCommandSummary(input: Record<string, unknown>): ReadableComm
           getNumberField(readAction, ["endLine", "end_line", "lineEnd", "to", "end"])
         ) ?? getSedLineRange(command),
       }
+    }
+  }
+
+  if (searchAction) {
+    const target =
+      getStringField(searchAction, ["query", "q", "pattern", "path", "directory", "dir", "search"]) ??
+      "workspace"
+
+    return {
+      kind: "search",
+      label: "Searched",
+      path: target,
+      lines: null,
     }
   }
 
