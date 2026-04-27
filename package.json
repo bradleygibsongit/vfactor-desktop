@@ -8,6 +8,7 @@
     "dev": "bun run desktop:dev",
     "build": "bun run desktop:build && bun run site:build",
     "preview": "bun run desktop:preview",
+    "test": "bun run scripts/run-tests.ts",
     "typecheck": "bun run desktop:typecheck",
     "desktop:dev": "bun run --cwd apps/desktop dev",
     "desktop:preview": "bun run --cwd apps/desktop preview",
