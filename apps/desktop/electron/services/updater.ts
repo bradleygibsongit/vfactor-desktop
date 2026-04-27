@@ -33,6 +33,7 @@ interface UpdaterServiceOptions {
   getActiveUpdateWork?: GetActiveUpdateWork
   prepareForInstall?: PrepareForInstall
   restoreAfterInstallFailure?: RestoreAfterInstallFailure
+  platform?: NodeJS.Platform
   autoCheckDelayMs?: number
   autoCheckIntervalMs?: number
   installHandoffTimeoutMs?: number
@@ -97,6 +98,7 @@ export class UpdaterService {
   private readonly getActiveUpdateWork: GetActiveUpdateWork
   private readonly prepareForInstall: PrepareForInstall
   private readonly restoreAfterInstallFailure: RestoreAfterInstallFailure
+  private readonly platform: NodeJS.Platform
   private readonly autoCheckDelayMs: number
   private readonly autoCheckIntervalMs: number
   private readonly installHandoffTimeoutMs: number
@@ -119,6 +121,7 @@ export class UpdaterService {
     this.getActiveUpdateWork = options.getActiveUpdateWork ?? (() => null)
     this.prepareForInstall = options.prepareForInstall ?? (() => {})
     this.restoreAfterInstallFailure = options.restoreAfterInstallFailure ?? (() => {})
+    this.platform = options.platform ?? process.platform
     this.autoCheckDelayMs = options.autoCheckDelayMs ?? AUTO_CHECK_DELAY_MS
     this.autoCheckIntervalMs = options.autoCheckIntervalMs ?? AUTO_CHECK_INTERVAL_MS
     this.installHandoffTimeoutMs = options.installHandoffTimeoutMs ?? INSTALL_HANDOFF_TIMEOUT_MS
@@ -281,7 +284,7 @@ export class UpdaterService {
 
   private createInitialState(): AppUpdateState {
     const enabled =
-      app.isPackaged && (process.platform === "darwin" || process.platform === "win32")
+      app.isPackaged && (this.platform === "darwin" || this.platform === "win32")
 
     return {
       enabled,

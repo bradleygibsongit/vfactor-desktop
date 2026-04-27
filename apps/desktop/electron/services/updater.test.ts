@@ -47,6 +47,17 @@ mock.module("./analytics", () => ({
 }))
 
 const { UpdaterService } = await import("./updater")
+type UpdaterServiceOptions = ConstructorParameters<typeof UpdaterService>[1]
+
+function createUpdaterService(
+  sendEvent: ConstructorParameters<typeof UpdaterService>[0] = () => {},
+  options: UpdaterServiceOptions = {},
+) {
+  return new UpdaterService(sendEvent, {
+    platform: "darwin",
+    ...options,
+  })
+}
 
 describe("UpdaterService", () => {
   beforeEach(() => {
@@ -81,7 +92,7 @@ describe("UpdaterService", () => {
   test("reports disabled state for unpackaged builds", async () => {
     appMock.isPackaged = false
 
-    const service = new UpdaterService(() => {})
+    const service = createUpdaterService()
     const state = service.getState()
     const result = await service.checkForUpdates()
 
@@ -108,7 +119,7 @@ describe("UpdaterService", () => {
     })
 
     const snapshots: Array<{ status: string; downloadPercent: number | null }> = []
-    const service = new UpdaterService((_channel, payload) => {
+    const service = createUpdaterService((_channel, payload) => {
       const snapshot = payload as { status: string; downloadPercent: number | null }
       snapshots.push({
         status: snapshot.status,
@@ -140,7 +151,7 @@ describe("UpdaterService", () => {
       emitUpdaterEvent("update-not-available")
     })
 
-    const service = new UpdaterService(() => {})
+    const service = createUpdaterService()
     const result = await service.checkForUpdates()
 
     expect(result.checked).toBe(true)
@@ -151,7 +162,7 @@ describe("UpdaterService", () => {
   test("keeps background check failures silent", async () => {
     autoUpdater.checkForUpdates.mockRejectedValue(new Error("Network down"))
 
-    const service = new UpdaterService(() => {})
+    const service = createUpdaterService()
     const result = await service.checkForUpdates({ manual: false })
 
     expect(result.checked).toBe(false)
@@ -166,7 +177,7 @@ describe("UpdaterService", () => {
       emitUpdaterEvent("update-downloaded", { version: "0.2.0" })
     })
 
-    const service = new UpdaterService(() => {}, {
+    const service = createUpdaterService(() => {}, {
       getActiveUpdateWork: () => ({
         activeTurns: 1,
         activeTerminalSessions: 2,
@@ -192,7 +203,7 @@ describe("UpdaterService", () => {
     })
 
     const prepareForInstall = mock(async () => {})
-    const service = new UpdaterService(() => {}, {
+    const service = createUpdaterService(() => {}, {
       prepareForInstall,
     })
 
@@ -214,7 +225,7 @@ describe("UpdaterService", () => {
     })
 
     const restoreAfterInstallFailure = mock(async () => {})
-    const service = new UpdaterService(() => {}, {
+    const service = createUpdaterService(() => {}, {
       restoreAfterInstallFailure,
       installHandoffTimeoutMs: 5,
     })
@@ -246,7 +257,7 @@ describe("UpdaterService", () => {
       emitUpdaterEvent("update-downloaded", { version: "0.2.0" })
     })
 
-    const service = new UpdaterService(() => {}, {
+    const service = createUpdaterService(() => {}, {
       getActiveUpdateWork: () => ({
         activeTurns: 1,
         activeTerminalSessions: 0,
@@ -276,7 +287,7 @@ describe("UpdaterService", () => {
     })
 
     const restoreAfterInstallFailure = mock(async () => {})
-    const service = new UpdaterService(() => {}, {
+    const service = createUpdaterService(() => {}, {
       restoreAfterInstallFailure,
     })
 
