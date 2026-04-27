@@ -14,6 +14,8 @@ function createBranchData(
     upstreamBranch: "origin/feature/sidebar",
     branches: ["main", "feature/sidebar"],
     remoteNames: ["origin"],
+    isGitAvailable: true,
+    isRepo: true,
     workingTreeSummary: {
       changedFiles: 0,
       additions: 0,
@@ -37,7 +39,7 @@ describe("resolveSidebarBranchIndicator", () => {
       createBranchData({ aheadCount: 2, behindCount: 1 })
     )
 
-    expect(indicator?.colorClass).toContain("text-rose-500")
+    expect(indicator?.colorClass).toContain("--color-vcs-diverged")
     expect(indicator?.tooltip).toContain("diverged")
   })
 
@@ -52,7 +54,7 @@ describe("resolveSidebarBranchIndicator", () => {
       })
     )
 
-    expect(indicator?.colorClass).toContain("text-amber-500")
+    expect(indicator?.colorClass).toContain("--color-vcs-modified")
     expect(indicator?.tooltip).toContain("3 uncommitted changes")
   })
 
@@ -61,7 +63,7 @@ describe("resolveSidebarBranchIndicator", () => {
       createBranchData({ aheadCount: 2 })
     )
 
-    expect(indicator?.colorClass).toContain("text-emerald-500")
+    expect(indicator?.colorClass).toContain("--color-vcs-ahead")
     expect(indicator?.tooltip).toContain("2 commits ahead")
   })
 
@@ -70,7 +72,7 @@ describe("resolveSidebarBranchIndicator", () => {
       createBranchData({ behindCount: 1 })
     )
 
-    expect(indicator?.colorClass).toContain("text-sky-500")
+    expect(indicator?.colorClass).toContain("--color-vcs-behind")
     expect(indicator?.tooltip).toContain("1 commit behind")
   })
 })
@@ -93,7 +95,7 @@ describe("resolveSidebarPullRequestIndicator", () => {
       })
     )
 
-    expect(indicator?.colorClass).toContain("text-emerald-500")
+    expect(indicator?.colorClass).toContain("--color-vcs-pr-open")
     expect(indicator?.tooltip).toContain("PR #42 open")
   })
 
@@ -114,7 +116,7 @@ describe("resolveSidebarPullRequestIndicator", () => {
       })
     )
 
-    expect(indicator?.colorClass).toContain("text-violet-500")
+    expect(indicator?.colorClass).toContain("--color-vcs-merged")
     expect(indicator?.tooltip).toContain("PR #99 merged")
   })
 })
