@@ -7,11 +7,14 @@ describe("getCommandCliKind", () => {
     expect(getCommandCliKind({ command: "git status --short" })).toBe("git")
     expect(getCommandCliKind({ command: "/usr/bin/git diff -- apps/desktop" })).toBe("git")
     expect(getCommandCliKind({ command: '/bin/zsh -lc "git status --short"' })).toBe("git")
+    expect(getCommandCliKind({ command: '/usr/bin/bash -c "git diff --stat"' })).toBe("git")
+    expect(getCommandCliKind({ command: 'zsh -lc "bash -c \\"git branch --show-current\\""' })).toBe("git")
   })
 
   test("classifies gh executables as GitHub", () => {
     expect(getCommandCliKind({ command: "gh pr view" })).toBe("github")
     expect(getCommandCliKind({ command: "git remote -v && gh pr checks" })).toBe("github")
+    expect(getCommandCliKind({ command: '/usr/bin/zsh -lc "gh pr view --json title"' })).toBe("github")
   })
 
   test("does not classify search arguments as git or GitHub commands", () => {
