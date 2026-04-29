@@ -30,6 +30,7 @@ export function WorkspaceSettingsModal({
   const updateWorktree = useProjectStore((state) => state.updateWorktree)
   const [name, setName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !worktree) {
@@ -37,6 +38,7 @@ export function WorkspaceSettingsModal({
     }
 
     setName(worktree.name)
+    setErrorMessage(null)
   }, [open, worktree])
 
   const normalizedName = name.trim()
@@ -48,12 +50,20 @@ export function WorkspaceSettingsModal({
     }
 
     setIsSaving(true)
+    setErrorMessage(null)
 
     try {
       await updateWorktree(project.id, worktree.id, {
         name,
       })
       onOpenChange(false)
+    } catch (error) {
+      console.error("Failed to update workspace name:", error)
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Couldn't save this workspace name."
+      )
     } finally {
       setIsSaving(false)
     }
@@ -78,10 +88,20 @@ export function WorkspaceSettingsModal({
             <Input
               id="workspace-display-name"
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value)
+                setErrorMessage(null)
+              }}
               placeholder="Workspace name"
               autoFocus
+              aria-invalid={errorMessage ? true : undefined}
+              aria-describedby={errorMessage ? "workspace-display-name-error" : undefined}
             />
+            {errorMessage ? (
+              <p id="workspace-display-name-error" className="text-xs text-destructive">
+                {errorMessage}
+              </p>
+            ) : null}
           </section>
 
           <section className="space-y-1.5 border-t border-border/60 pt-4">
