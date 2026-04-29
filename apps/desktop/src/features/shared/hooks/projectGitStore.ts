@@ -13,6 +13,7 @@ import {
 
 const WATCHER_REFRESH_DEBOUNCE_MS = 120
 const OPTIMISTIC_CHECKS_PENDING_GRACE_MS = 30_000
+const PULL_REQUEST_CHECKS_RATE_LIMIT_BACKOFF_MS = 60_000
 
 interface ProjectGitEntry {
   branchData: GitBranchesResponse | null
@@ -25,6 +26,8 @@ interface ProjectGitEntry {
   changesError: string | null
   pullRequestChecksError: string | null
   pullRequestChecksPendingUntil: number | null
+  pullRequestChecksRateLimitedUntil: number | null
+  pullRequestActivityLoadedAt: number | null
   isBranchLoading: boolean
   isChangesLoading: boolean
   isPullRequestChecksLoading: boolean
@@ -34,6 +37,7 @@ interface RefreshRequest {
   includeBranches: boolean
   includeChanges: boolean
   includePullRequestChecks: boolean
+  includePullRequestActivity: boolean
   quietBranches: boolean
   quietChanges: boolean
   quietPullRequestChecks: boolean
@@ -58,6 +62,7 @@ function normalizePullRequestChecksPayload(
     reviews: Array.isArray(result.reviews) ? result.reviews : [],
     comments: Array.isArray(result.comments) ? result.comments : [],
     reviewComments: Array.isArray(result.reviewComments) ? result.reviewComments : [],
+    activityIncluded: result.activityIncluded !== false,
   }
 }
 
@@ -72,6 +77,8 @@ const EMPTY_ENTRY: ProjectGitEntry = {
   changesError: null,
   pullRequestChecksError: null,
   pullRequestChecksPendingUntil: null,
+  pullRequestChecksRateLimitedUntil: null,
+  pullRequestActivityLoadedAt: null,
   isBranchLoading: false,
   isChangesLoading: false,
   isPullRequestChecksLoading: false,
@@ -178,6 +185,87 @@ function resolveBranchDataForEntry(
   }
 }
 
+function isRateLimitError(message: string | null | undefined): boolean {
+  if (!message) {
+    return false
+  }
+
+  return /rate limit|rate-limit|ratelimit|api rate/i.test(message)
+}
+
+function getChecksStatusFromChecks(
+  checks: GitPullRequestCheck[]
+): GitPullRequest["checksStatus"] {
+  if (checks.some((check) => check.status === "failed")) {
+    return "failed"
+  }
+
+  if (checks.some((check) => check.status === "pending")) {
+    return "pending"
+  }
+
+  if (checks.some((check) => check.status === "passed")) {
+    return "passed"
+  }
+
+  return "none"
+}
+
+function updateBranchDataFromPullRequestChecks(
+  entry: ProjectGitEntry,
+  result: GitPullRequestChecksResponse
+): GitBranchesResponse | null {
+  const branchData = entry.branchData
+  const pullRequest = branchData?.openPullRequest
+
+  if (
+    !branchData ||
+    !pullRequest ||
+    pullRequest.state !== "open" ||
+    result.pullRequestNumber == null ||
+    pullRequest.number !== result.pullRequestNumber ||
+    result.error
+  ) {
+    return branchData
+  }
+
+  const checksStatus = getChecksStatusFromChecks(result.checks)
+  if (
+    checksStatus === "none" &&
+    pullRequest.checksStatus === "pending" &&
+    entry.pullRequestChecksPendingUntil != null &&
+    Date.now() < entry.pullRequestChecksPendingUntil
+  ) {
+    return branchData
+  }
+
+  const failedCheckNames = result.checks
+    .filter((check) => check.status === "failed")
+    .map((check) => check.name)
+  const pendingChecksCount = result.checks.filter((check) => check.status === "pending").length
+  const failedChecksCount = failedCheckNames.length
+  const passedChecksCount = result.checks.filter((check) => check.status === "passed").length
+
+  return {
+    ...branchData,
+    openPullRequest: {
+      ...pullRequest,
+      checksStatus,
+      checksError: null,
+      pendingChecksCount,
+      failedChecksCount,
+      passedChecksCount,
+      failedCheckNames,
+      resolveReason:
+        checksStatus === "failed"
+          ? "failed_checks"
+          : pullRequest.resolveReason === "failed_checks"
+            ? undefined
+            : pullRequest.resolveReason,
+    },
+  }
+}
+
 const pendingRefreshByProject = new Map<
   string,
   RefreshRequest & { timerId: ReturnType<typeof setTimeout> | null }
@@ -185,10 +273,11 @@ const pendingRefreshByProject = new Map<
 
 const inFlightBranchesByProject = new Map<string, Promise<GitBranchesResponse | null>>()
 const inFlightChangesByProject = new Map<string, Promise<GitFileChange[]>>()
-const inFlightPullRequestChecksByProject = new Map<
-  string,
-  Promise<GitPullRequestChecksResponse>
->()
+const inFlightPullRequestChecksByProject = new Map<string, Promise<GitPullRequestChecksResponse>>()
+
+function getPullRequestChecksInFlightKey(projectPath: string, includeActivity: boolean): string {
+  return `${projectPath}:${includeActivity ? "activity" : "checks"}`
+}
 
 function mergeRefreshRequest(
   current: RefreshRequest | undefined,
@@ -199,6 +288,8 @@ function mergeRefreshRequest(
     includeChanges: (current?.includeChanges ?? false) || (next.includeChanges ?? false),
     includePullRequestChecks:
       (current?.includePullRequestChecks ?? false) || (next.includePullRequestChecks ?? false),
+    includePullRequestActivity:
+      (current?.includePullRequestActivity ?? false) || (next.includePullRequestActivity ?? false),
     quietBranches: (current?.quietBranches ?? true) && (next.quietBranches ?? true),
     quietChanges: (current?.quietChanges ?? true) && (next.quietChanges ?? true),
     quietPullRequestChecks:
@@ -283,19 +374,20 @@ async function refreshChanges(projectPath: string): Promise<GitFileChange[]> {
   }
 }
 
-async function refreshPullRequestChecks(projectPath: string) {
-  const existingRequest = inFlightPullRequestChecksByProject.get(projectPath)
+async function refreshPullRequestChecks(projectPath: string, includeActivity: boolean) {
+  const inFlightKey = getPullRequestChecksInFlightKey(projectPath, includeActivity)
+  const existingRequest = inFlightPullRequestChecksByProject.get(inFlightKey)
   if (existingRequest) {
     return existingRequest
   }
 
-  const request = desktop.git.getPullRequestChecks(projectPath)
-  inFlightPullRequestChecksByProject.set(projectPath, request)
+  const request = desktop.git.getPullRequestChecks(projectPath, { includeActivity })
+  inFlightPullRequestChecksByProject.set(inFlightKey, request)
 
   try {
     return normalizePullRequestChecksPayload(await request)
   } finally {
-    inFlightPullRequestChecksByProject.delete(projectPath)
+    inFlightPullRequestChecksByProject.delete(inFlightKey)
   }
 }
 
@@ -342,6 +434,12 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
             branchError: null,
             pullRequestChecksError: shouldRetainChecks ? currentEntry.pullRequestChecksError : null,
             pullRequestChecksPendingUntil,
+            pullRequestChecksRateLimitedUntil: shouldRetainChecks
+              ? currentEntry.pullRequestChecksRateLimitedUntil
+              : null,
+            pullRequestActivityLoadedAt: shouldRetainChecks
+              ? currentEntry.pullRequestActivityLoadedAt
+              : null,
             isBranchLoading: false,
             isPullRequestChecksLoading: shouldRetainChecks
               ? currentEntry.isPullRequestChecksLoading
@@ -374,6 +472,7 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
           includeBranches: pending.includeBranches,
           includeChanges: pending.includeChanges,
           includePullRequestChecks: pending.includePullRequestChecks,
+          includePullRequestActivity: pending.includePullRequestActivity,
           quietBranches: pending.quietBranches,
           quietChanges: pending.quietChanges,
           quietPullRequestChecks: pending.quietPullRequestChecks,
@@ -447,6 +546,12 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
                       ? currentEntry.pullRequestChecksError
                       : null,
                     pullRequestChecksPendingUntil,
+                    pullRequestChecksRateLimitedUntil: shouldRetainChecks
+                      ? currentEntry.pullRequestChecksRateLimitedUntil
+                      : null,
+                    pullRequestActivityLoadedAt: shouldRetainChecks
+                      ? currentEntry.pullRequestActivityLoadedAt
+                      : null,
                     isBranchLoading: false,
                     isPullRequestChecksLoading: shouldRetainChecks
                       ? currentEntry.isPullRequestChecksLoading
@@ -503,14 +608,35 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
     }
 
     if (request.includePullRequestChecks) {
+      const includeActivity = request.includePullRequestActivity === true
+      const rateLimitedUntil = getEntry(
+        get().entriesByProjectPath,
+        projectPath
+      ).pullRequestChecksRateLimitedUntil
+
+      if (rateLimitedUntil != null && Date.now() < rateLimitedUntil) {
+        set((state) => ({
+          entriesByProjectPath: {
+            ...state.entriesByProjectPath,
+            [projectPath]: {
+              ...getEntry(state.entriesByProjectPath, projectPath),
+              isPullRequestChecksLoading: false,
+            },
+          },
+        }))
+      } else {
       tasks.push(
-        refreshPullRequestChecks(projectPath)
+        refreshPullRequestChecks(projectPath, includeActivity)
           .then((result) => {
             const normalizedResult = normalizePullRequestChecksPayload(result)
             set((state) => ({
               entriesByProjectPath: (() => {
                 const currentEntry = getEntry(state.entriesByProjectPath, projectPath)
                 const currentPullRequest = currentEntry.branchData?.openPullRequest
+                const activityIncluded = normalizedResult.activityIncluded !== false
+                const nextRateLimitedUntil = isRateLimitError(normalizedResult.error)
+                  ? Date.now() + PULL_REQUEST_CHECKS_RATE_LIMIT_BACKOFF_MS
+                  : null
 
                 if (
                   !currentPullRequest ||
@@ -523,19 +649,38 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
                     [projectPath]: {
                       ...currentEntry,
                       isPullRequestChecksLoading: false,
+                      pullRequestChecksRateLimitedUntil: nextRateLimitedUntil,
                     },
                   }
                 }
+
+                const nextBranchData = updateBranchDataFromPullRequestChecks(
+                  currentEntry,
+                  normalizedResult
+                )
 
                 return {
                   ...state.entriesByProjectPath,
                   [projectPath]: {
                     ...currentEntry,
-                    pullRequestChecks: normalizedResult.error ? [] : normalizedResult.checks,
-                    pullRequestComments: normalizedResult.comments,
-                    pullRequestReviews: normalizedResult.reviews,
-                    pullRequestReviewComments: normalizedResult.reviewComments,
+                    branchData: nextBranchData,
+                    pullRequestChecks: normalizedResult.error
+                      ? currentEntry.pullRequestChecks
+                      : normalizedResult.checks,
+                    pullRequestComments: activityIncluded
+                      ? normalizedResult.comments
+                      : currentEntry.pullRequestComments,
+                    pullRequestReviews: activityIncluded
+                      ? normalizedResult.reviews
+                      : currentEntry.pullRequestReviews,
+                    pullRequestReviewComments: activityIncluded
+                      ? normalizedResult.reviewComments
+                      : currentEntry.pullRequestReviewComments,
                     pullRequestChecksError: normalizedResult.error ?? null,
+                    pullRequestChecksRateLimitedUntil: nextRateLimitedUntil,
+                    pullRequestActivityLoadedAt: activityIncluded
+                      ? Date.now()
+                      : currentEntry.pullRequestActivityLoadedAt,
                     isPullRequestChecksLoading: false,
                   },
                 }
@@ -543,18 +688,23 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
             }))
           })
           .catch((error) => {
+            const formattedError = formatPullRequestChecksLoadError(error)
             set((state) => ({
               entriesByProjectPath: {
                 ...state.entriesByProjectPath,
                 [projectPath]: {
                   ...getEntry(state.entriesByProjectPath, projectPath),
-                  pullRequestChecksError: formatPullRequestChecksLoadError(error),
+                  pullRequestChecksError: formattedError,
+                  pullRequestChecksRateLimitedUntil: isRateLimitError(formattedError)
+                    ? Date.now() + PULL_REQUEST_CHECKS_RATE_LIMIT_BACKOFF_MS
+                    : null,
                   isPullRequestChecksLoading: false,
                 },
               },
             }))
           })
       )
+      }
     }
 
     await Promise.all(tasks)

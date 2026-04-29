@@ -169,6 +169,11 @@ export interface GitPullRequestChecksResponse {
   reviewComments: GitPullRequestReviewComment[]
   pullRequestNumber: number | null
   error?: string | null
+  activityIncluded?: boolean
+}
+
+export interface GitPullRequestChecksOptions {
+  includeActivity?: boolean
 }
 
 export interface GitWorktreeSummary {

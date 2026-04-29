@@ -13,6 +13,7 @@ import type {
   GitFileDiff,
   GitMergePullRequestResult,
   GitPullRequestResolveReason,
+  GitPullRequestChecksOptions,
   GitPullRequestChecksResponse,
   GitPullRequestCheck,
   GitPullRequestComment,
@@ -120,6 +121,7 @@ function normalizePullRequestChecksResponse(
     reviewComments,
     pullRequestNumber,
     error,
+    activityIncluded: response.activityIncluded !== false,
   }
 }
 
@@ -231,7 +233,7 @@ export const desktop = {
   git: {
     getBranches: (projectPath: string) => window.vfactor.git.getBranches(projectPath),
     getChanges: (projectPath: string) => window.vfactor.git.getChanges(projectPath),
-    getPullRequestChecks: (projectPath: string) => {
+    getPullRequestChecks: (projectPath: string, options?: GitPullRequestChecksOptions) => {
       const getPullRequestChecks = window.vfactor.git.getPullRequestChecks
       if (typeof getPullRequestChecks !== "function") {
         console.warn("[desktop.git] getPullRequestChecks is unavailable in the current preload bridge")
@@ -242,10 +244,11 @@ export const desktop = {
           reviewComments: [],
           pullRequestNumber: null,
           error: "Pull request checks are unavailable in the current desktop bridge.",
+          activityIncluded: false,
         })
       }
 
-      return getPullRequestChecks(projectPath).then((result) =>
+      return getPullRequestChecks(projectPath, options).then((result) =>
         normalizePullRequestChecksResponse(projectPath, result)
       )
     },
@@ -299,6 +302,7 @@ export type {
   GitFileDiff,
   GitMergePullRequestResult,
   GitPullRequestResolveReason,
+  GitPullRequestChecksOptions,
   GitPullRequestChecksResponse,
   GitPullRequestCheck,
   GitPullRequestComment,

@@ -18,6 +18,7 @@ import type {
   GitPullRequestCheck,
   GitPullRequestComment,
   GitPullRequest,
+  GitPullRequestChecksOptions,
   GitPullRequestChecksResponse,
   GitPullRequestReviewComment,
   GitPullRequestReview,
@@ -237,6 +238,10 @@ function formatGhError(error: unknown, fallback: string): string {
   }
 
   return fallback
+}
+
+function isGhRateLimitError(error: unknown): boolean {
+  return /rate limit|rate-limit|ratelimit|api rate/i.test(formatGhError(error, ""))
 }
 
 async function runGhJsonCommandWithAllowedExitCodes(
@@ -668,7 +673,11 @@ async function readGitDiffPatch(
   try {
     const patch = await runGitCommand(projectPath, args)
     return patch.trim() ? patch : null
-  } catch {
+  } catch (error) {
+    if (isGhRateLimitError(error)) {
+      throw error
+    }
+
     return null
   }
 }
@@ -1938,6 +1947,10 @@ async function getPullRequestForBranch(
         return hydrated
       }
     } catch (error) {
+      if (isGhRateLimitError(error)) {
+        throw error
+      }
+
       logGitDebug("[git] getPullRequestForBranch:list-open:error", {
         projectPath,
         branchName,
@@ -1979,6 +1992,10 @@ async function getPullRequestForBranch(
           return hydrated
         }
       } catch (error) {
+        if (isGhRateLimitError(error)) {
+          throw error
+        }
+
         logGitDebug("[git] getPullRequestForBranch:list-merged:error", {
           projectPath,
           branchName,
@@ -2723,8 +2740,12 @@ export class GitService {
     return getChangedFiles(trimmedPath)
   }
 
-  async getPullRequestChecks(projectPath: string): Promise<GitPullRequestChecksResponse> {
+  async getPullRequestChecks(
+    projectPath: string,
+    options?: GitPullRequestChecksOptions
+  ): Promise<GitPullRequestChecksResponse> {
     const trimmedPath = ensureGitProjectPath(projectPath)
+    const includeActivity = options?.includeActivity !== false
     const branchData = await getGitBranchesResponse(trimmedPath)
     const pullRequest = branchData.openPullRequest
 
@@ -2736,18 +2757,32 @@ export class GitService {
         reviewComments: [],
         pullRequestNumber: null,
         error: null,
+        activityIncluded: includeActivity,
       }
     }
 
-    const [rawChecks, rawReviews, rawComments, reviewComments] = await Promise.all([
-      getRawPullRequestChecks(trimmedPath, pullRequest.number),
+    const rawChecks = await getRawPullRequestChecks(trimmedPath, pullRequest.number)
+    const checks = await Promise.all(
+      rawChecks.checks.map((rawCheck) => mapPullRequestCheck(trimmedPath, rawCheck))
+    )
+
+    if (!includeActivity || rawChecks.error) {
+      return {
+        checks,
+        reviews: [],
+        comments: [],
+        reviewComments: [],
+        pullRequestNumber: pullRequest.number,
+        error: rawChecks.error,
+        activityIncluded: false,
+      }
+    }
+
+    const [rawReviews, rawComments, reviewComments] = await Promise.all([
       getRawPullRequestReviews(trimmedPath, pullRequest.number, pullRequest.url),
       getRawPullRequestComments(trimmedPath, pullRequest.number, pullRequest.url),
       getRawPullRequestReviewComments(trimmedPath, pullRequest.number, pullRequest.url),
     ])
-    const checks = await Promise.all(
-      rawChecks.checks.map((rawCheck) => mapPullRequestCheck(trimmedPath, rawCheck))
-    )
     const reviews = rawReviews.map((rawReview) => mapPullRequestReview(rawReview))
     const comments = rawComments.map((rawComment) => mapPullRequestComment(rawComment))
 
@@ -2758,6 +2793,7 @@ export class GitService {
       reviewComments,
       pullRequestNumber: pullRequest.number,
       error: rawChecks.error,
+      activityIncluded: true,
     }
   }
 
