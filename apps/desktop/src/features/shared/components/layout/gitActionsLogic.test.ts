@@ -52,7 +52,8 @@ describe("resolveQuickAction", () => {
 
     expect(quickAction.label).toBe("Checks pending")
     expect(quickAction.disabled).toBe(false)
-    expect(quickAction.kind).toBe("open_pr")
+    expect(quickAction.kind).toBe("open_checks")
+    expect(quickAction.hint).toContain("opens the Checks tab")
     expect(quickAction.tone).toBe("warning")
   })
 
@@ -81,6 +82,60 @@ describe("resolveQuickAction", () => {
     expect(quickAction.label).toBe("Fix checks")
     expect(quickAction.disabled).toBe(false)
     expect(quickAction.icon).toBe("chat")
+    expect(quickAction.kind).toBe("resolve_pr")
+    expect(quickAction.tone).toBe("danger")
+  })
+
+  test("keeps pending checks ahead of merge blockers", () => {
+    const quickAction = resolveQuickAction(
+      createBranchData({
+        openPullRequest: {
+          number: 42,
+          title: "Header polish",
+          url: "https://example.com/pr/42",
+          state: "open",
+          baseBranch: "main",
+          headBranch: "feature/header",
+          checksStatus: "pending",
+          mergeStatus: "blocked",
+          isMergeable: false,
+          resolveReason: "behind",
+          pendingChecksCount: 2,
+        },
+      }),
+      false,
+      false,
+      { preferredRemoteName: "origin", canArchiveWorktree: true }
+    )
+
+    expect(quickAction.label).toBe("Checks pending")
+    expect(quickAction.kind).toBe("open_checks")
+    expect(quickAction.tone).toBe("warning")
+  })
+
+  test("keeps failed checks ahead of merge blockers", () => {
+    const quickAction = resolveQuickAction(
+      createBranchData({
+        openPullRequest: {
+          number: 42,
+          title: "Header polish",
+          url: "https://example.com/pr/42",
+          state: "open",
+          baseBranch: "main",
+          headBranch: "feature/header",
+          checksStatus: "failed",
+          mergeStatus: "blocked",
+          isMergeable: false,
+          resolveReason: "failed_checks",
+          failedChecksCount: 1,
+        },
+      }),
+      false,
+      false,
+      { preferredRemoteName: "origin", canArchiveWorktree: true }
+    )
+
+    expect(quickAction.label).toBe("Fix checks")
     expect(quickAction.kind).toBe("resolve_pr")
     expect(quickAction.tone).toBe("danger")
   })

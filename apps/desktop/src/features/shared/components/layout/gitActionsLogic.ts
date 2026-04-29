@@ -36,6 +36,7 @@ export interface GitQuickAction {
   kind:
     | "merge_pr"
     | "open_archive"
+    | "open_checks"
     | "open_pr"
     | "resolve_pr"
     | "run_action"
@@ -71,11 +72,14 @@ function isArchiveAvailable(
 
 function getChecksPendingHint(branchData: GitBranchesResponse): string {
   const pendingCount = branchData.openPullRequest?.pendingChecksCount ?? 0
-  if (pendingCount > 0) {
-    return pendingCount === 1 ? "1 required check is still running." : `${pendingCount} required checks are still running.`
-  }
+  const countLabel =
+    pendingCount > 0
+      ? pendingCount === 1
+        ? "1 required check is still running."
+        : `${pendingCount} required checks are still running.`
+      : "Required checks are still running for this pull request."
 
-  return "Required checks are still running for this pull request."
+  return `GitHub says checks are still pending.\n${countLabel}\nClicking this opens the Checks tab here so you can watch them finish.`
 }
 
 function canResolvePullRequest(branchData: GitBranchesResponse): boolean {
@@ -330,7 +334,7 @@ export function resolveQuickAction(
         label: "Checks pending",
         disabled: false,
         icon: "pr",
-        kind: "open_pr",
+        kind: "open_checks",
         hint: getChecksPendingHint(branchData),
         tone: "warning",
       }

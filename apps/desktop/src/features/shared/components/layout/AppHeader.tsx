@@ -59,6 +59,7 @@ import {
 } from "./gitActionsLogic"
 import { useCurrentProjectWorktree } from "@/features/shared/hooks"
 import { buildResolvePrompt } from "./gitResolve"
+import { useRightSidebar } from "./useRightSidebar"
 
 interface SourceControlActionGroupProps {
   className?: string
@@ -157,6 +158,7 @@ export function SourceControlActionGroup({
   const createOptimisticSession = useChatStore((state) => state.createOptimisticSession)
   const sendMessage = useChatStore((state) => state.sendMessage)
   const openChatSession = useTabStore((state) => state.openChatSession)
+  const { expand: expandRightSidebar, setActiveTab: setRightSidebarActiveTab } = useRightSidebar()
   const {
     branchData,
     isLoading: isBranchLoading,
@@ -537,6 +539,13 @@ export function SourceControlActionGroup({
     }
   }
 
+  const openChecksTab = () => {
+    expandRightSidebar()
+    setRightSidebarActiveTab("checks")
+    setFeedbackTone("neutral")
+    setFeedbackMessage(null)
+  }
+
   const handleMergePullRequest = async () => {
     console.debug("[AppHeader] handleMergePullRequest:start", {
       projectPath: resolvedProjectPath,
@@ -645,6 +654,11 @@ export function SourceControlActionGroup({
       return
     }
 
+    if (quickAction.kind === "open_checks") {
+      openChecksTab()
+      return
+    }
+
     if (quickAction.kind === "merge_pr") {
       await handleMergePullRequest()
       return
@@ -717,6 +731,7 @@ export function SourceControlActionGroup({
   const displayLabel = busyLabel ?? (isSubmitting && activeStep ? STEP_LABELS[activeStep] : quickAction.label)
   const iconKey = isSubmitting ? "spinner" : quickAction.label
   const labelKey = displayLabel
+  const isChecksPendingAction = quickAction.kind === "open_checks"
   const splitButtonTone = feedbackTone === "error" && feedbackMessage ? "danger" : quickAction.tone
   const feedbackSurfaceTone = feedbackTone === "error" ? "destructive" : "info"
   const feedbackTitle = feedbackTone === "error" ? "Git action failed" : "Git action"
@@ -758,7 +773,11 @@ export function SourceControlActionGroup({
             animate={{ opacity: 1, scale: 1, transition: enterTransition }}
             exit={{ opacity: 0, scale: 0.6, position: "absolute", transition: exitTransition }}
           >
-            {isSubmitting ? <CircleNotch size={16} className="animate-spin" /> : quickActionIcon}
+            {isSubmitting || isChecksPendingAction ? (
+              <CircleNotch size={16} className="animate-spin" />
+            ) : (
+              quickActionIcon
+            )}
           </motion.span>
         </AnimatePresence>
       </span>

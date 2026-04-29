@@ -566,6 +566,15 @@ describe("pull request metadata helpers", () => {
     expect(
       normalizePullRequestResolveReason({
         state: "OPEN",
+        checksStatus: "pending",
+        mergeStatus: "blocked",
+        mergeable: "UNKNOWN",
+        mergeStateStatus: "BEHIND",
+      })
+    ).toBeUndefined()
+    expect(
+      normalizePullRequestResolveReason({
+        state: "OPEN",
         checksStatus: "passed",
         mergeStatus: "blocked",
         mergeable: "CONFLICTING",
