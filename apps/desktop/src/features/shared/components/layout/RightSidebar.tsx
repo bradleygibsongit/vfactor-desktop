@@ -90,6 +90,7 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
   const shouldLoadChecks = openPullRequest?.state === "open"
   const {
     checks: pullRequestChecks,
+    commits: pullRequestCommits,
     comments: pullRequestComments,
     reviews: pullRequestReviews,
     reviewComments: pullRequestReviewComments,
@@ -512,6 +513,7 @@ export function RightSidebar({ activeView = "chat" }: RightSidebarProps) {
                     <PullRequestChecksPanel
                       pullRequest={openPullRequest}
                       checks={pullRequestChecks}
+                      commits={pullRequestCommits}
                       comments={pullRequestComments}
                       reviews={pullRequestReviews}
                       reviewComments={pullRequestReviewComments}

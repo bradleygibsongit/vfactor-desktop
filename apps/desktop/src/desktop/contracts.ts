@@ -145,9 +145,24 @@ export interface GitPullRequestComment {
   url?: string | null
 }
 
+export interface GitPullRequestCommit {
+  oid: string
+  abbreviatedOid: string
+  messageHeadline: string
+  messageBody?: string | null
+  authoredDate?: string | null
+  committedDate?: string | null
+  url?: string | null
+  authorName?: string | null
+  authorEmail?: string | null
+  authorLogin?: string | null
+  authorAvatarUrl?: string | null
+}
+
 export interface GitPullRequestReviewComment {
   id: string
   threadId: string
+  pullRequestReviewId?: string | null
   authorLogin: string
   authorAvatarUrl?: string | null
   body?: string | null
@@ -168,6 +183,7 @@ export interface GitPullRequestReviewComment {
 
 export interface GitPullRequestChecksResponse {
   checks: GitPullRequestCheck[]
+  commits: GitPullRequestCommit[]
   reviews: GitPullRequestReview[]
   comments: GitPullRequestComment[]
   reviewComments: GitPullRequestReviewComment[]

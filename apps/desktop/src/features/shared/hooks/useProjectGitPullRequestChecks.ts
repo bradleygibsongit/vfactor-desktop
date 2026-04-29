@@ -125,6 +125,7 @@ export function useProjectGitPullRequestChecks(
 
   return {
     checks: entry?.pullRequestChecks ?? [],
+    commits: entry?.pullRequestCommits ?? [],
     comments: entry?.pullRequestComments ?? [],
     reviews: entry?.pullRequestReviews ?? [],
     reviewComments: entry?.pullRequestReviewComments ?? [],

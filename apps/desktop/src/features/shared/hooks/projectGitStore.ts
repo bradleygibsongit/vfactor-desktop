@@ -6,6 +6,7 @@ import {
   type GitPullRequest,
   type GitPullRequestCheck,
   type GitPullRequestChecksResponse,
+  type GitPullRequestCommit,
   type GitPullRequestComment,
   type GitPullRequestReviewComment,
   type GitPullRequestReview,
@@ -19,6 +20,7 @@ interface ProjectGitEntry {
   branchData: GitBranchesResponse | null
   changes: GitFileChange[]
   pullRequestChecks: GitPullRequestCheck[]
+  pullRequestCommits: GitPullRequestCommit[]
   pullRequestComments: GitPullRequestComment[]
   pullRequestReviews: GitPullRequestReview[]
   pullRequestReviewComments: GitPullRequestReviewComment[]
@@ -59,6 +61,7 @@ function normalizePullRequestChecksPayload(
   return {
     ...result,
     checks: Array.isArray(result.checks) ? result.checks : [],
+    commits: Array.isArray(result.commits) ? result.commits : [],
     reviews: Array.isArray(result.reviews) ? result.reviews : [],
     comments: Array.isArray(result.comments) ? result.comments : [],
     reviewComments: Array.isArray(result.reviewComments) ? result.reviewComments : [],
@@ -71,6 +74,7 @@ const EMPTY_ENTRY: ProjectGitEntry = {
   branchData: null,
   changes: [],
   pullRequestChecks: [],
+  pullRequestCommits: [],
   pullRequestComments: [],
   pullRequestReviews: [],
   pullRequestReviewComments: [],
@@ -455,6 +459,7 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
                 ? currentEntry.pullRequestChecks
                 : [],
             pullRequestComments: shouldRetainChecks ? currentEntry.pullRequestComments : [],
+            pullRequestCommits: shouldRetainChecks ? currentEntry.pullRequestCommits : [],
             pullRequestReviews: shouldRetainChecks ? currentEntry.pullRequestReviews : [],
             pullRequestReviewComments: shouldRetainChecks ? currentEntry.pullRequestReviewComments : [],
             branchError: null,
@@ -571,6 +576,7 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
                         ? currentEntry.pullRequestChecks
                         : [],
                     pullRequestComments: shouldRetainChecks ? currentEntry.pullRequestComments : [],
+                    pullRequestCommits: shouldRetainChecks ? currentEntry.pullRequestCommits : [],
                     pullRequestReviews: shouldRetainChecks ? currentEntry.pullRequestReviews : [],
                     pullRequestReviewComments: shouldRetainChecks
                       ? currentEntry.pullRequestReviewComments
@@ -705,6 +711,9 @@ export const useProjectGitStore = create<ProjectGitStoreState>((set, get) => ({
                     pullRequestComments: activityIncluded
                       ? normalizedResult.comments
                       : currentEntry.pullRequestComments,
+                    pullRequestCommits: activityIncluded
+                      ? normalizedResult.commits
+                      : currentEntry.pullRequestCommits,
                     pullRequestReviews: activityIncluded
                       ? normalizedResult.reviews
                       : currentEntry.pullRequestReviews,

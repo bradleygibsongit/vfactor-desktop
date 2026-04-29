@@ -16,6 +16,7 @@ import type {
   GitPullRequestChecksOptions,
   GitPullRequestChecksResponse,
   GitPullRequestCheck,
+  GitPullRequestCommit,
   GitPullRequestComment,
   GitPullRequestCheckStatus,
   GitPullRequestReviewComment,
@@ -90,9 +91,11 @@ function normalizePullRequestChecksResponse(
 ): GitPullRequestChecksResponse {
   const response = (value ?? {}) as Partial<GitPullRequestChecksResponse>
   const checks = Array.isArray(response.checks) ? response.checks : []
+  const hasCommitsArray = Array.isArray(response.commits)
   const hasReviewsArray = Array.isArray(response.reviews)
   const hasCommentsArray = Array.isArray(response.comments)
   const hasReviewCommentsArray = Array.isArray(response.reviewComments)
+  const commits = hasCommitsArray ? response.commits : []
   const reviews = hasReviewsArray ? response.reviews : []
   const comments = hasCommentsArray ? response.comments : []
   const reviewComments = hasReviewCommentsArray ? response.reviewComments : []
@@ -101,12 +104,13 @@ function normalizePullRequestChecksResponse(
   const error = response.error ?? null
   const activityError = response.activityError ?? null
 
-  if (!hasReviewsArray || !hasCommentsArray || !hasReviewCommentsArray) {
+  if (!hasCommitsArray || !hasReviewsArray || !hasCommentsArray || !hasReviewCommentsArray) {
     const legacyBridgeMessage =
-      "The desktop bridge is still using the older pull request checks payload. Restart the desktop dev process to load reviews and comments."
+      "The desktop bridge is still using the older pull request checks payload. Restart the desktop dev process to load commits, reviews, and comments."
 
     return {
       checks,
+      commits,
       reviews,
       comments,
       reviewComments,
@@ -119,6 +123,7 @@ function normalizePullRequestChecksResponse(
 
   return {
     checks,
+    commits,
     reviews,
     comments,
     reviewComments,
@@ -310,9 +315,11 @@ export type {
   GitPullRequestChecksOptions,
   GitPullRequestChecksResponse,
   GitPullRequestCheck,
+  GitPullRequestCommit,
   GitPullRequestComment,
   GitPullRequestCheckStatus,
   GitPullRequestReview,
+  GitPullRequestReviewComment,
   GitPullResult,
   GitRenameWorktreeInput,
   GitRenameWorktreeResult,
