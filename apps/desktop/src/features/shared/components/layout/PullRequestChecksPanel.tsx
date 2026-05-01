@@ -207,11 +207,14 @@ function PendingCheckSpinner({ className }: { className?: string }) {
     <span
       aria-hidden="true"
       className={cn(
-        "inline-block size-4 shrink-0 animate-spin rounded-full border-[3px] border-transparent border-b-current border-r-current border-t-current",
+        "relative inline-flex size-4 shrink-0 items-center justify-center",
         feedbackIconClassName("warning"),
         className
       )}
-    />
+    >
+      <span className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-b-current border-r-current border-t-current" />
+      <span className="size-1.5 rounded-full bg-current" />
+    </span>
   )
 }
 
