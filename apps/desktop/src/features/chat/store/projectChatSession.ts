@@ -62,22 +62,15 @@ interface ExecuteProjectChatCommandInput extends ProjectChatWorkspaceInput {
   onSessionReady?: ProjectChatSessionReadyHandler
 }
 
-function closeProjectChatSessionTab(sessionId: string): void {
-  const tabStore = useTabStore.getState()
-  const sessionTab = tabStore.tabs.find(
-    (tab) => tab.type === "chat-session" && tab.sessionId === sessionId
-  )
-
-  if (sessionTab) {
-    tabStore.closeTab(sessionTab.id)
-  }
+function closeProjectChatSessionTab(worktreeId: string | null, sessionId: string): void {
+  useTabStore.getState().closeChatSessionTab(sessionId, worktreeId)
 }
 
 async function cleanupCreatedProjectChatSession(
   worktreeId: string | null,
   sessionId: string
 ): Promise<void> {
-  closeProjectChatSessionTab(sessionId)
+  closeProjectChatSessionTab(worktreeId, sessionId)
 
   if (!worktreeId) {
     return
@@ -97,7 +90,7 @@ export function ensureProjectChatSessionTab(
   const projectChat = useChatStore.getState().chatByWorktree[worktreeId]
   const session = projectChat?.sessions.find((candidate) => candidate.id === sessionId) ?? null
 
-  useTabStore.getState().ensureChatSessionTab(sessionId, session?.title)
+  useTabStore.getState().ensureChatSessionTab(sessionId, session?.title, worktreeId)
 }
 
 export async function createProjectChatSession(
