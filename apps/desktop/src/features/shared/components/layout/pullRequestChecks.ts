@@ -75,7 +75,7 @@ export function summarizePullRequestChecks(
       skippedCount,
       totalCount,
       tone: "waiting",
-      label: "Waiting for checks",
+      label: "Checks pending",
     }
   }
 

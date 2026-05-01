@@ -1,5 +1,6 @@
 import {
   CaretRight,
+  Check,
   CheckCircle,
   CircleNotch,
   GitCommit,
@@ -159,20 +160,20 @@ function getCheckTone(status: GitPullRequestCheck["status"]): string {
   }
 }
 
-function getCheckStatusLabel(status: GitPullRequestCheck["status"]): string {
+function getCheckStatusA11yLabel(status: GitPullRequestCheck["status"]): string {
   switch (status) {
     case "pending":
-      return "Pending"
+      return "status: pending"
     case "failed":
-      return "Failed"
+      return "status: failed"
     case "passed":
-      return "Passed"
+      return "status: passed"
     case "cancelled":
-      return "Cancelled"
+      return "status: cancelled"
     case "skipped":
-      return "Skipped"
+      return "status: skipped"
     default:
-      return "Unknown"
+      return "status: unknown"
   }
 }
 
@@ -201,16 +202,42 @@ function ReviewPathLabel({ path }: { path: string }) {
   )
 }
 
+function PendingCheckSpinner({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "relative inline-flex size-4 shrink-0 items-center justify-center",
+        feedbackIconClassName("warning"),
+        className
+      )}
+    >
+      <span className="absolute inset-0 animate-spin rounded-full border-[1.5px] border-transparent border-b-current border-r-current border-t-current" />
+      <span className="size-2 rounded-full bg-current" />
+    </span>
+  )
+}
+
+function PassedCheckIcon({ className }: { className?: string }) {
+  return (
+    <Check
+      size={17}
+      weight="bold"
+      className={cn("size-4 shrink-0", feedbackIconClassName("success"), className)}
+    />
+  )
+}
+
 function CheckStatusIcon({ status }: { status: GitPullRequestCheck["status"] }) {
   const className = cn("size-4 shrink-0", getCheckTone(status))
 
   switch (status) {
     case "pending":
-      return <CircleNotch size={15} className={cn(className, "animate-spin")} />
+      return <PendingCheckSpinner />
     case "failed":
       return <X size={15} className={className} />
     case "passed":
-      return <CheckCircle size={15} className={className} />
+      return <PassedCheckIcon />
     case "cancelled":
       return <Clock size={15} className={className} />
     case "skipped":
@@ -755,16 +782,11 @@ function ChecksBlock({
       summaryToneClass = feedbackIconClassName("destructive")
       break
     case "waiting":
-      summaryIcon = (
-        <CircleNotch
-          size={15}
-          className={cn("size-4 shrink-0", feedbackIconClassName("warning"), "animate-spin")}
-        />
-      )
+      summaryIcon = <PendingCheckSpinner />
       summaryToneClass = feedbackIconClassName("warning")
       break
     case "passed":
-      summaryIcon = <CheckCircle size={15} className={cn("size-4 shrink-0", feedbackIconClassName("success"))} />
+      summaryIcon = <PassedCheckIcon />
       summaryToneClass = feedbackIconClassName("success")
       break
     default:
@@ -773,75 +795,49 @@ function ChecksBlock({
       break
   }
 
-  const detailParts: string[] = []
-  if (summary.failedCount > 0) {
-    detailParts.push(`${summary.failedCount} failing`)
-  }
-  if (summary.pendingCount > 0) {
-    detailParts.push(`${summary.pendingCount} running`)
-  }
-  if (summary.passedCount > 0) {
-    detailParts.push(`${summary.passedCount} passed`)
-  }
-  if (summary.skippedCount > 0) {
-    detailParts.push(`${summary.skippedCount} skipped`)
-  }
-  if (summary.cancelledCount > 0) {
-    detailParts.push(`${summary.cancelledCount} cancelled`)
-  }
-  const detailLine = detailParts.length > 0 ? detailParts.join(" · ") : null
-
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="overflow-hidden rounded-xl border border-sidebar-border/60 bg-background/55">
-        <CollapsibleTrigger
-          className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent/40"
-          disabled={sorted.length === 0}
-        >
-          {summaryIcon}
-          <div className="min-w-0 flex-1">
-            <div className={cn("text-sm font-medium", summaryToneClass)}>{summary.label}</div>
-            {detailLine ? (
-              <div className="text-xs text-muted-foreground">{detailLine}</div>
-            ) : null}
-          </div>
-          {sorted.length > 0 ? (
-            <CaretRight
-              size={12}
-              className={cn(
-                "shrink-0 text-muted-foreground transition-transform",
-                isOpen && "rotate-90"
+      <CollapsibleTrigger
+        className="flex w-full items-center gap-2 py-1.5 text-left transition-colors"
+        disabled={sorted.length === 0}
+      >
+        {summaryIcon}
+        <div className={cn("min-w-0 truncate text-sm font-medium", summaryToneClass)}>
+          {summary.label}
+        </div>
+        {sorted.length > 0 ? (
+          <CaretRight
+            size={12}
+            className={cn(
+              "shrink-0 text-muted-foreground transition-transform",
+              isOpen && "rotate-90"
+            )}
+          />
+        ) : null}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="space-y-1.5">
+          {sorted.map((check) => (
+            <li key={check.id} className="flex min-w-0 items-center gap-2 text-sm">
+              <CheckStatusIcon status={check.status} />
+              {check.detailsUrl ? (
+                <ExternalLink
+                  href={check.detailsUrl}
+                  className="truncate text-foreground hover:underline"
+                >
+                  {check.name}
+                  <span className="sr-only">{`: ${getCheckStatusA11yLabel(check.status)}`}</span>
+                </ExternalLink>
+              ) : (
+                <span className="truncate text-foreground">
+                  {check.name}
+                  <span className="sr-only">{`: ${getCheckStatusA11yLabel(check.status)}`}</span>
+                </span>
               )}
-            />
-          ) : null}
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="border-t border-sidebar-border/40 px-3 py-2">
-            <ul className="space-y-1.5">
-              {sorted.map((check) => (
-                <li key={check.id} className="flex items-center justify-between gap-3 text-xs">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <CheckStatusIcon status={check.status} />
-                    {check.detailsUrl ? (
-                      <ExternalLink
-                        href={check.detailsUrl}
-                        className="truncate text-foreground hover:underline"
-                      >
-                        {check.name}
-                      </ExternalLink>
-                    ) : (
-                      <span className="truncate text-foreground">{check.name}</span>
-                    )}
-                  </div>
-                  <span className={cn("shrink-0 text-[11px]", getCheckTone(check.status))}>
-                    {getCheckStatusLabel(check.status)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </CollapsibleContent>
-      </div>
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
     </Collapsible>
   )
 }
