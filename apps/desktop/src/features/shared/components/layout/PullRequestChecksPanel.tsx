@@ -792,24 +792,6 @@ function ChecksBlock({
       break
   }
 
-  const detailParts: string[] = []
-  if (summary.failedCount > 0) {
-    detailParts.push(`${summary.failedCount} failing`)
-  }
-  if (summary.pendingCount > 0) {
-    detailParts.push(`${summary.pendingCount} running`)
-  }
-  if (summary.passedCount > 0) {
-    detailParts.push(`${summary.passedCount} passed`)
-  }
-  if (summary.skippedCount > 0) {
-    detailParts.push(`${summary.skippedCount} skipped`)
-  }
-  if (summary.cancelledCount > 0) {
-    detailParts.push(`${summary.cancelledCount} cancelled`)
-  }
-  const detailLine = detailParts.length > 0 ? detailParts.join(" · ") : null
-
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <div className="overflow-hidden rounded-xl border border-sidebar-border/60 bg-background/55">
@@ -818,11 +800,8 @@ function ChecksBlock({
           disabled={sorted.length === 0}
         >
           {summaryIcon}
-          <div className="min-w-0 flex-1">
-            <div className={cn("text-sm font-medium", summaryToneClass)}>{summary.label}</div>
-            {detailLine ? (
-              <div className="text-xs text-muted-foreground">{detailLine}</div>
-            ) : null}
+          <div className={cn("min-w-0 flex-1 truncate text-sm font-medium", summaryToneClass)}>
+            {summary.label}
           </div>
           {sorted.length > 0 ? (
             <CaretRight

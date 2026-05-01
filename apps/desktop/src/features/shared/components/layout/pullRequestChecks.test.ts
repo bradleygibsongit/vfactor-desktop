@@ -41,7 +41,7 @@ describe("pullRequestChecks", () => {
       pendingCount: 1,
       failedCount: 1,
       tone: "waiting",
-      label: "Waiting for checks",
+      label: "Checks pending",
     })
   })
 
