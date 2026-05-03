@@ -109,14 +109,51 @@ export function preserveExistingMessageMetadata(
       return message
     }
 
-    return {
-      ...message,
-      info: {
-        ...message.info,
-        createdAt: previousMessage.info.createdAt,
-      },
+    if (message === previousMessage) {
+      return previousMessage
     }
+
+    const normalizedMessage =
+      message.info.createdAt === previousMessage.info.createdAt
+        ? message
+        : {
+            ...message,
+            info: {
+              ...message.info,
+              createdAt: previousMessage.info.createdAt,
+            },
+          }
+
+    if (areMessagesEquivalent(previousMessage, normalizedMessage)) {
+      return previousMessage
+    }
+
+    return normalizedMessage
   })
+}
+
+function areMessagesEquivalent(
+  previousMessage: MessageWithParts,
+  nextMessage: MessageWithParts
+): boolean {
+  const previousInfo = previousMessage.info
+  const nextInfo = nextMessage.info
+
+  return (
+    previousInfo.id === nextInfo.id &&
+    previousInfo.sessionId === nextInfo.sessionId &&
+    previousInfo.role === nextInfo.role &&
+    previousInfo.createdAt === nextInfo.createdAt &&
+    previousInfo.turnId === nextInfo.turnId &&
+    previousInfo.finishReason === nextInfo.finishReason &&
+    previousInfo.title === nextInfo.title &&
+    previousInfo.itemType === nextInfo.itemType &&
+    previousInfo.phase === nextInfo.phase &&
+    JSON.stringify(previousInfo.runtimeNotice ?? null) ===
+      JSON.stringify(nextInfo.runtimeNotice ?? null) &&
+    (previousMessage.parts === nextMessage.parts ||
+      getMessagePartsSignature(previousMessage) === getMessagePartsSignature(nextMessage))
+  )
 }
 
 function getMessagePartsSignature(message: MessageWithParts): string {
